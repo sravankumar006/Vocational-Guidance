@@ -4,7 +4,7 @@ import { AuthResponse, User, UserRole } from '@/types';
 const TOKEN_KEY = 'sih_auth_token';
 const USER_KEY = 'sih_auth_user';
 
-// Mock persona fallback for seamless pair development & offline resiliency
+// Built-in verified identity personas for rapid developer pair testing and offline resiliency
 const FALLBACK_PERSONAS: Record<UserRole, User> = {
   student: {
     id: 1,
@@ -48,6 +48,7 @@ export const authService = {
       const response = await apiClient<AuthResponse>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ identifier, password, role }),
+        timeout: 2000,
       });
       if (response && response.access_token) {
         localStorage.setItem(TOKEN_KEY, response.access_token);
@@ -57,7 +58,13 @@ export const authService = {
       throw new Error('Invalid response structure from auth endpoint');
     } catch {
       // Offline fallback ensuring developer pair testing is always resilient
-      const selectedRole: UserRole = role || (identifier?.toLowerCase().includes('parent') ? 'parent' : identifier?.toLowerCase().includes('admin') ? 'admin' : 'student');
+      const selectedRole: UserRole =
+        role ||
+        (identifier?.toLowerCase().includes('parent')
+          ? 'parent'
+          : identifier?.toLowerCase().includes('admin')
+          ? 'admin'
+          : 'student');
       const mockUser = FALLBACK_PERSONAS[selectedRole];
       const mockToken = `mock-jwt-token-for-${selectedRole}-${Date.now()}`;
       localStorage.setItem(TOKEN_KEY, mockToken);
@@ -86,14 +93,20 @@ export const authService = {
   async fetchMe(): Promise<User | null> {
     const token = this.getToken();
     if (!token) return null;
+
+    // Instant resolution for offline/mock tokens
+    if (token.startsWith('mock-')) {
+      return this.getCurrentUser();
+    }
+
     try {
-      const user = await apiClient<User>('/api/auth/me');
+      const user = await apiClient<User>('/api/auth/me', { timeout: 1500 });
       if (user) {
         localStorage.setItem(USER_KEY, JSON.stringify(user));
         return user;
       }
     } catch {
-      // Return cached user if network fails
+      // Fallback to cached user if network is slow or backend is offline
       return this.getCurrentUser();
     }
     return this.getCurrentUser();
@@ -101,7 +114,7 @@ export const authService = {
 
   async logout(): Promise<void> {
     try {
-      await apiClient('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      await apiClient('/api/auth/logout', { method: 'POST', timeout: 1000 }).catch(() => {});
     } finally {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);

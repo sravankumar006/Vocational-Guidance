@@ -15,24 +15,42 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(authService.getCurrentUser());
-  const [token, setToken] = useState<string | null>(authService.getToken());
-  const [loading, setLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<User | null>(() => authService.getCurrentUser());
+  const [token, setToken] = useState<string | null>(() => authService.getToken());
+  // If a user is already available in localStorage, do not block the UI on initial render
+  const [loading, setLoading] = useState<boolean>(() => {
+    const hasToken = !!authService.getToken();
+    const hasUser = !!authService.getCurrentUser();
+    return hasToken && !hasUser;
+  });
 
   useEffect(() => {
+    let isMounted = true;
     async function verifyAuth() {
-      if (authService.getToken()) {
-        const verifiedUser = await authService.fetchMe();
-        if (verifiedUser) {
-          setUser(verifiedUser);
-        } else {
-          setUser(null);
-          setToken(null);
+      const currentToken = authService.getToken();
+      if (currentToken) {
+        try {
+          const verifiedUser = await authService.fetchMe();
+          if (isMounted) {
+            if (verifiedUser) {
+              setUser(verifiedUser);
+            } else {
+              setUser(null);
+              setToken(null);
+            }
+          }
+        } catch {
+          // Graceful fallback to cached state
         }
       }
-      setLoading(false);
+      if (isMounted) {
+        setLoading(false);
+      }
     }
     verifyAuth();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = useCallback(async (identifier?: string, password?: string, role?: UserRole) => {
@@ -68,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         token,
         loading,
-        isAuthenticated: !!user && !!token,
+        isAuthenticated: !!user,
         login,
         logout,
         switchRole,
