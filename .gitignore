@@ -1,0 +1,50 @@
+# =================================================================
+# Root .gitignore (Vocational Guidance Platform)
+# =================================================================
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+service-account*.json
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+dist/
+.vite/
+
+# Backend & Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# Databases & Runtime Files
+*.sqlite
+*.sqlite3
+/database
+
+# Logs & Coverage
+logs/
+*.log
+coverage/
+htmlcov/
+
+# IDE & OS Specific
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
