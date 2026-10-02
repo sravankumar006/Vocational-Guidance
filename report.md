@@ -205,3 +205,21 @@ This file tracks all work done across each phase and brick in simple, clear lang
 - **Dry-run**: 10,000 / 10,000 rows passed all validation checks with 0 errors.
 - **Idempotency Test**: Verified via test run that secondary runs insert 0 duplicate reference entities.
 - **Backend Tests**: `pytest` passed 7/7 tests.
+
+---
+
+## Git Repository Hygiene & Collaboration Setup
+
+### What Was Done:
+1. **Branch Configuration**: Primary branch set to `main`.
+2. **Comprehensive `.gitignore`**:
+   - Frontend: `node_modules/`, `dist/`, `.vite/`, `.env`, `.env.*`, `!.env.example`
+   - Backend/Python: `__pycache__/`, `*.py[cod]`, `.venv/`, `venv/`, `env/`, `.pytest_cache/`, `.mypy_cache/`
+   - Databases/Logs: `*.sqlite`, `*.sqlite3`, `/database`, `logs/`, `*.log`, `coverage/`, `htmlcov/`
+   - Secrets: `*.pem`, `*.key`, `credentials.json`, `service-account*.json`
+   - IDE/OS: `.vscode/`, `.idea/`, `*.swp`, `.DS_Store`, `Thumbs.db`
+3. **Secret Scan**: Scanned 94 project files with 0 secrets detected.
+4. **README.md Created**: Minimal setup guide with frontend/backend launch commands and collaboration instructions.
+5. **Initial Commit & Push**:
+   - Created root commit: `chore: initialize project repository` (111 files).
+   - Successfully pushed to `origin/main` (`https://github.com/sravankumar006/Vocational-Guidance.git`).
