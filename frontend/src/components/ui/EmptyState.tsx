@@ -1,37 +1,33 @@
 import React from 'react';
 import { Inbox } from 'lucide-react';
-import { cn } from '@/utils';
 
 export interface EmptyStateProps {
   title: string;
   description?: string;
+  icon?: React.ReactNode;
   action?: React.ReactNode;
-  icon?: React.ComponentType<{ className?: string }>;
   className?: string;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   title,
   description,
+  icon,
   action,
-  icon: Icon = Inbox,
-  className,
+  className = '',
 }) => {
   return (
     <div
-      className={cn(
-        'flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center',
-        className
-      )}
+      className={`flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-xl border border-dashed border-border bg-background-card/40 ${className}`}
     >
-      <div className="rounded-full bg-slate-100 p-3 text-slate-500 mb-3">
-        <Icon className="h-6 w-6" />
+      <div className="p-3.5 rounded-full bg-background-elevated text-text-muted mb-4 border border-border">
+        {icon || <Inbox className="h-6 w-6 text-text-muted" />}
       </div>
-      <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+      <h3 className="text-base font-semibold text-text-primary mb-1">{title}</h3>
       {description && (
-        <p className="text-xs text-slate-500 mt-1 max-w-sm">{description}</p>
+        <p className="text-sm text-text-secondary max-w-md mb-5">{description}</p>
       )}
-      {action && <div className="mt-4">{action}</div>}
+      {action && <div>{action}</div>}
     </div>
   );
 };

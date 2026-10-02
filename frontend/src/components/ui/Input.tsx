@@ -1,52 +1,64 @@
-import React, { useId } from 'react';
-import { cn } from '@/utils';
+import React from 'react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   helperText?: string;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
 }
 
 export const Input: React.FC<InputProps> = ({
   label,
   error,
   helperText,
+  leftIcon,
+  rightIcon,
+  className = '',
   id,
-  className,
   disabled,
   ...props
 }) => {
-  const generatedId = useId();
-  const inputId = id || generatedId;
+  const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
   return (
     <div className="w-full space-y-1.5">
       {label && (
         <label
           htmlFor={inputId}
-          className="block text-xs font-semibold text-slate-700"
+          className="block text-xs font-medium text-text-secondary select-none"
         >
           {label}
         </label>
       )}
-      <input
-        id={inputId}
-        disabled={disabled}
-        aria-invalid={Boolean(error)}
-        aria-describedby={error ? `${inputId}-error` : undefined}
-        className={cn(
-          'w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400',
-          error ? 'border-red-400 focus:border-red-500 focus:ring-red-300' : 'border-slate-300',
-          className
+      <div className="relative flex items-center">
+        {leftIcon && (
+          <div className="absolute left-3 text-text-muted pointer-events-none flex items-center">
+            {leftIcon}
+          </div>
         )}
-        {...props}
-      />
+        <input
+          id={inputId}
+          disabled={disabled}
+          className={`w-full bg-white/[0.03] text-text-primary placeholder:text-text-muted border rounded-lg py-2 transition-colors text-sm focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed ${
+            leftIcon ? 'pl-9' : 'pl-3'
+          } ${rightIcon ? 'pr-9' : 'pr-3'} ${
+            error ? 'border-status-error/80 focus:ring-rose-400' : 'border-border/60 hover:border-border'
+          } ${className}`}
+          {...props}
+        />
+        {rightIcon && (
+          <div className="absolute right-3 text-text-muted flex items-center">
+            {rightIcon}
+          </div>
+        )}
+      </div>
       {error ? (
-        <p id={`${inputId}-error`} className="text-xs text-red-600 font-medium">
-          {error}
+        <p className="text-xs text-status-error flex items-center gap-1 font-medium">
+          <span>•</span> {error}
         </p>
       ) : helperText ? (
-        <p className="text-xs text-slate-500">{helperText}</p>
+        <p className="text-xs text-text-muted">{helperText}</p>
       ) : null}
     </div>
   );

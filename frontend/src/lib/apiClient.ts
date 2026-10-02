@@ -1,5 +1,5 @@
 /**
- * Base HTTP client configured with environment variables.
+ * Base HTTP client configured with environment variables and authorization persistence.
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
@@ -14,6 +14,11 @@ export async function apiClient<T>(
     'Content-Type': 'application/json',
   };
 
+  const token = localStorage.getItem('sih_auth_token');
+  if (token) {
+    defaultHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -23,8 +28,15 @@ export async function apiClient<T>(
   });
 
   if (!response.ok) {
-    const errorBody = await response.text().catch(() => '');
-    throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorBody}`);
+    let errorDetail = response.statusText;
+    try {
+      const errorJson = await response.json();
+      errorDetail = errorJson.detail || errorJson.message || response.statusText;
+    } catch {
+      const errorText = await response.text().catch(() => '');
+      if (errorText) errorDetail = errorText;
+    }
+    throw new Error(errorDetail || `API Error ${response.status}`);
   }
 
   return response.json() as Promise<T>;

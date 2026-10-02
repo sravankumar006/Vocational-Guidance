@@ -1,19 +1,36 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { MainLayout } from '@/layouts/MainLayout';
+import { AuthLayout } from '@/layouts/AuthLayout';
 import { StudentLayout } from '@/layouts/StudentLayout';
 import { ParentLayout } from '@/layouts/ParentLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 
-import { HomePage } from '@/pages/HomePage';
-import { StudentHome } from '@/pages/student/StudentHome';
-import { ParentHome } from '@/pages/parent/ParentHome';
-import { AdminHome } from '@/pages/admin/AdminHome';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { RoleGuard } from '@/components/auth/RoleGuard';
 
-/**
- * Centralized application route definitions.
- * Guards and role-based checks can be mounted onto these layout branches in future bricks.
- */
+import { HomePage } from '@/pages/HomePage';
+import { LoginPage } from '@/pages/auth/LoginPage';
+import { UnauthorizedPage } from '@/pages/auth/UnauthorizedPage';
+
+// Student Portal Pages
+import { StudentHome } from '@/pages/student/StudentHome';
+import { StudentProfile } from '@/pages/student/StudentProfile';
+import { StudentCareer } from '@/pages/student/StudentCareer';
+import { StudentCounselling } from '@/pages/student/StudentCounselling';
+
+// Parent Portal Pages
+import { ParentHome } from '@/pages/parent/ParentHome';
+import { ParentConcerns } from '@/pages/parent/ParentConcerns';
+import { ParentCounselling } from '@/pages/parent/ParentCounselling';
+
+// Admin Portal Pages
+import { AdminHome } from '@/pages/admin/AdminHome';
+import { AdminAnalytics } from '@/pages/admin/AdminAnalytics';
+import { AdminData } from '@/pages/admin/AdminData';
+import { AdminEscalations } from '@/pages/admin/AdminEscalations';
+
 export const router = createBrowserRouter([
+  // Public Landing
   {
     path: '/',
     element: <MainLayout />,
@@ -24,37 +41,111 @@ export const router = createBrowserRouter([
       },
     ],
   },
+
+  // Authentication & Access Denied Layout
+  {
+    element: <AuthLayout />,
+    children: [
+      {
+        path: '/login',
+        element: <LoginPage />,
+      },
+      {
+        path: '/unauthorized',
+        element: <UnauthorizedPage />,
+      },
+    ],
+  },
+
+  // Student Portal Branch (Protected + Role Guard: student or shared family parent)
   {
     path: '/student',
-    element: <StudentLayout />,
+    element: (
+      <ProtectedRoute>
+        <RoleGuard allowedRoles={['student', 'parent']}>
+          <StudentLayout />
+        </RoleGuard>
+      </ProtectedRoute>
+    ),
     children: [
       {
         index: true,
         element: <StudentHome />,
       },
-      // Future student feature sub-routes will be appended here
+      {
+        path: 'profile',
+        element: <StudentProfile />,
+      },
+      {
+        path: 'career',
+        element: <StudentCareer />,
+      },
+      {
+        path: 'counselling',
+        element: <StudentCounselling />,
+      },
     ],
   },
+
+  // Parent Portal Branch (Protected + Role Guard: parent or shared family student)
   {
     path: '/parent',
-    element: <ParentLayout />,
+    element: (
+      <ProtectedRoute>
+        <RoleGuard allowedRoles={['parent', 'student']}>
+          <ParentLayout />
+        </RoleGuard>
+      </ProtectedRoute>
+    ),
     children: [
       {
         index: true,
         element: <ParentHome />,
       },
-      // Future parent feature sub-routes will be appended here
+      {
+        path: 'concerns',
+        element: <ParentConcerns />,
+      },
+      {
+        path: 'counselling',
+        element: <ParentCounselling />,
+      },
     ],
   },
+
+  // Admin Portal Branch (Protected + Strict Role Guard: admin ONLY)
   {
     path: '/admin',
-    element: <AdminLayout />,
+    element: (
+      <ProtectedRoute>
+        <RoleGuard allowedRoles={['admin']}>
+          <AdminLayout />
+        </RoleGuard>
+      </ProtectedRoute>
+    ),
     children: [
       {
         index: true,
         element: <AdminHome />,
       },
-      // Future admin feature sub-routes will be appended here
+      {
+        path: 'analytics',
+        element: <AdminAnalytics />,
+      },
+      {
+        path: 'data',
+        element: <AdminData />,
+      },
+      {
+        path: 'escalations',
+        element: <AdminEscalations />,
+      },
     ],
+  },
+
+  // Fallback
+  {
+    path: '*',
+    element: <Navigate to="/" replace />,
   },
 ]);

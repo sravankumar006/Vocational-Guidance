@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
-import { cn } from '@/utils';
+import { IconButton } from '@/components/ui/IconButton';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -8,7 +8,8 @@ export interface ModalProps {
   title?: string;
   description?: string;
   children: React.ReactNode;
-  className?: string;
+  footer?: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,20 +18,17 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   description,
   children,
-  className,
+  footer,
+  size = 'md',
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
-
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
     }
-
     return () => {
       document.body.style.overflow = 'unset';
       window.removeEventListener('keydown', handleKeyDown);
@@ -39,49 +37,57 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!isOpen) return null;
 
+  const sizes = {
+    sm: 'max-w-md',
+    md: 'max-w-lg',
+    lg: 'max-w-2xl',
+    xl: 'max-w-4xl',
+  };
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={title ? 'modal-title' : undefined}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Modal Card */}
+      {/* Modal Dialog */}
       <div
-        className={cn(
-          'relative w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-md transition-all z-10',
-          className
-        )}
+        role="dialog"
+        aria-modal="true"
+        className={`relative w-full ${sizes[size]} bg-background-card border border-border-strong rounded-xl shadow-glass overflow-hidden z-10`}
       >
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            {title && (
-              <h2 id="modal-title" className="text-lg font-bold text-slate-900">
-                {title}
-              </h2>
-            )}
-            {description && (
-              <p className="text-xs text-slate-500 mt-1">{description}</p>
-            )}
+        {(title || description) && (
+          <div className="flex items-start justify-between p-5 border-b border-border">
+            <div>
+              {title && (
+                <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
+              )}
+              {description && (
+                <p className="text-sm text-text-secondary mt-0.5">{description}</p>
+              )}
+            </div>
+            <IconButton
+              icon={<X className="h-5 w-5" />}
+              ariaLabel="Close modal"
+              onClick={onClose}
+              variant="ghost"
+              size="sm"
+            />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 p-1 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400"
-            aria-label="Close modal"
-          >
-            <X className="h-5 w-5" />
-          </button>
+        )}
+
+        <div className="p-5 overflow-y-auto max-h-[75vh] text-text-primary">
+          {children}
         </div>
 
-        <div className="text-slate-800 text-sm">{children}</div>
+        {footer && (
+          <div className="flex items-center justify-end gap-3 p-4 bg-background-surface border-t border-border">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

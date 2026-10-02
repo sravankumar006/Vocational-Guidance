@@ -1,63 +1,41 @@
 import React from 'react';
-import { cn } from '@/utils';
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'muted';
+  children: React.ReactNode;
+  variant?: 'default' | 'elevated' | 'interactive' | 'outline';
+  padding?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
 }
 
 export const Card: React.FC<CardProps> = ({
   children,
-  className,
   variant = 'default',
+  padding = 'md',
+  className = '',
   ...props
 }) => {
+  const baseStyles = 'rounded-xl transition-colors text-text-primary';
+
   const variants = {
-    default: 'bg-white border-slate-200 text-slate-800',
-    muted: 'bg-slate-50 border-slate-200 text-slate-700',
+    default: 'bg-background-card border border-border/70 shadow-soft',
+    elevated: 'bg-background-surface border border-border shadow-elevated',
+    interactive: 'bg-background-card border border-border/70 hover:border-border-strong hover:bg-background-surface cursor-pointer shadow-soft',
+    outline: 'bg-transparent border border-border/50',
+  };
+
+  const paddings = {
+    none: 'p-0',
+    sm: 'p-3',
+    md: 'p-4 sm:p-5',
+    lg: 'p-5 sm:p-6',
+    xl: 'p-6 sm:p-8',
   };
 
   return (
     <div
-      className={cn('rounded-lg border p-6 shadow-sm', variants[variant], className)}
+      className={`${baseStyles} ${variants[variant]} ${paddings[padding]} ${className}`}
       {...props}
     >
       {children}
     </div>
   );
 };
-
-export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
-  className,
-  children,
-  ...props
-}) => (
-  <div className={cn('mb-4 border-b border-slate-100 pb-3', className)} {...props}>
-    {children}
-  </div>
-);
-
-export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({
-  className,
-  children,
-  ...props
-}) => (
-  <h3 className={cn('text-base font-bold text-slate-900', className)} {...props}>
-    {children}
-  </h3>
-);
-
-export const CardDescription: React.FC<React.HTMLAttributes<HTMLParagraphElement>> = ({
-  className,
-  children,
-  ...props
-}) => (
-  <p className={cn('text-xs text-slate-500 mt-1', className)} {...props}>
-    {children}
-  </p>
-);
-
-export const CardContent: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
-  className,
-  children,
-  ...props
-}) => <div className={cn('', className)} {...props}>{children}</div>;

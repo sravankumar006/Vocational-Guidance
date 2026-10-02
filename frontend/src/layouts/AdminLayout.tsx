@@ -1,47 +1,34 @@
 import React from 'react';
-import { Outlet, Link } from 'react-router-dom';
-import { Shield, Home } from 'lucide-react';
-import { Navbar } from '@/components/layout/Navbar';
-import { Sidebar } from '@/components/layout/Sidebar';
-import type { NavigationItem } from '@/types';
-
-const adminNavItems: NavigationItem[] = [
-  { label: 'Overview', href: '/admin', icon: Home },
-];
+import { Outlet } from 'react-router-dom';
+import { AppShell } from '@/components/layout/AppShell';
+import { NavigationItem } from '@/types';
+import { LayoutDashboard, BarChart3, Database, AlertTriangle } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 export const AdminLayout: React.FC = () => {
+  const { user } = useAuth();
+
+  const adminNavItems: NavigationItem[] = [
+    { label: 'Overview', labelTe: 'స్థూల దృష్టి', href: '/admin', icon: LayoutDashboard },
+    { label: 'Analytics', labelTe: 'గణాంకాలు', href: '/admin/analytics', icon: BarChart3 },
+    { label: 'Data Management', labelTe: 'డేటా నిర్వహణ', href: '/admin/data', icon: Database, badge: '10K Recs' },
+    { label: 'Human Escalations', labelTe: 'కౌన్సిలర్ సంప్రదింపులు', href: '/admin/escalations', icon: AlertTriangle, badge: '3 Open' },
+  ];
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100 text-slate-800">
-      <Navbar
-        brand={
-          <div className="flex items-center space-x-2.5">
-            <div className="bg-slate-700 text-white p-1.5 rounded-md">
-              <Shield className="h-5 w-5 text-slate-100" />
-            </div>
-            <span className="font-semibold text-slate-800 text-sm">
-              Admin Environment
-            </span>
+    <AppShell
+      navigationItems={adminNavItems}
+      sidebarTitle="Platform Administration"
+      sidebarFooter={
+        <div className="space-y-1 text-xs">
+          <div className="font-semibold text-text-primary">SIH26241 Portal</div>
+          <div className="text-[11px] text-text-muted">
+            Authenticated: {user?.name || 'Administrator'}
           </div>
-        }
-        actions={
-          <Link
-            to="/"
-            className="text-xs text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded hover:bg-slate-50 transition-colors"
-          >
-            &larr; Exit to Root
-          </Link>
-        }
-      />
-      <div className="flex-1 flex max-w-7xl w-full mx-auto">
-        <Sidebar
-          items={adminNavItems}
-          header={<div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Admin Navigation</div>}
-          className="hidden md:flex border-r border-slate-200"
-        />
-        <main className="flex-1 p-6 md:p-8">
-          <Outlet />
-        </main>
-      </div>
-    </div>
+        </div>
+      }
+    >
+      <Outlet />
+    </AppShell>
   );
 };
