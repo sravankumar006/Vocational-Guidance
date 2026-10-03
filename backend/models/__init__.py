@@ -16,6 +16,8 @@ from models.user import (
     User,
     StudentProfile,
     ParentProfile,
+    ParentStudentAssociation,
+    UserSession,
 )
 
 from models.education import (
@@ -58,6 +60,9 @@ __all__ = [
     "StudentProfile",
     # 3. ParentProfile
     "ParentProfile",
+    # Auth & Family Association (Phase 1 Brick 7)
+    "ParentStudentAssociation",
+    "UserSession",
     # 4. Occupation
     "Occupation",
     # 5. Course

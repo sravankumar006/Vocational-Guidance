@@ -4,7 +4,7 @@
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-const DEFAULT_TIMEOUT_MS = 2500;
+const DEFAULT_TIMEOUT_MS = 10000;
 
 export async function apiClient<T>(
   endpoint: string,
@@ -21,13 +21,15 @@ export async function apiClient<T>(
     defaultHeaders['Authorization'] = `Bearer ${token}`;
   }
 
-  // Fast timeout to guarantee UI navigation is never blocked
   const timeoutMs = options?.timeout ?? DEFAULT_TIMEOUT_MS;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutId = setTimeout(() => {
+    controller.abort(new Error(`Request timed out after ${timeoutMs}ms. The server may be busy or offline.`));
+  }, timeoutMs);
 
   try {
     const response = await fetch(url, {
+      credentials: options?.credentials || 'include',
       ...options,
       signal: options?.signal || controller.signal,
       headers: {
@@ -49,6 +51,14 @@ export async function apiClient<T>(
     }
 
     return response.json() as Promise<T>;
+  } catch (err: any) {
+    if (err.name === 'AbortError' || (err.message && err.message.includes('aborted'))) {
+      throw new Error('Connection timed out. The backend server might be offline or slow to respond.');
+    }
+    if (err.message && err.message.includes('Failed to fetch')) {
+      throw new Error('Unable to connect to the backend server. Please verify it is running on port 8000.');
+    }
+    throw err;
   } finally {
     clearTimeout(timeoutId);
   }

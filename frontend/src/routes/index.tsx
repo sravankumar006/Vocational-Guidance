@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 import { MainLayout } from '@/layouts/MainLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { StudentLayout } from '@/layouts/StudentLayout';
@@ -11,11 +11,13 @@ import { RoleGuard } from '@/components/auth/RoleGuard';
 import { HomePage } from '@/pages/HomePage';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { UnauthorizedPage } from '@/pages/auth/UnauthorizedPage';
+import { NotFoundPage } from '@/pages/NotFoundPage';
 
 // Student Portal Pages
 import { StudentHome } from '@/pages/student/StudentHome';
 import { StudentProfile } from '@/pages/student/StudentProfile';
 import { StudentCareer } from '@/pages/student/StudentCareer';
+import { StudentCareerDetail } from '@/pages/student/StudentCareerDetail';
 import { StudentCounselling } from '@/pages/student/StudentCounselling';
 
 // Parent Portal Pages
@@ -57,12 +59,12 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Student Portal Branch (Protected + Role Guard: student or shared family parent)
+  // Student Portal Branch (Protected + Role Guard: student ONLY)
   {
     path: '/student',
     element: (
       <ProtectedRoute>
-        <RoleGuard allowedRoles={['student', 'parent']}>
+        <RoleGuard allowedRoles={['student']}>
           <StudentLayout />
         </RoleGuard>
       </ProtectedRoute>
@@ -81,18 +83,22 @@ export const router = createBrowserRouter([
         element: <StudentCareer />,
       },
       {
+        path: 'career/:careerId',
+        element: <StudentCareerDetail />,
+      },
+      {
         path: 'counselling',
         element: <StudentCounselling />,
       },
     ],
   },
 
-  // Parent Portal Branch (Protected + Role Guard: parent or shared family student)
+  // Parent Portal Branch (Protected + Role Guard: parent ONLY)
   {
     path: '/parent',
     element: (
       <ProtectedRoute>
-        <RoleGuard allowedRoles={['parent', 'student']}>
+        <RoleGuard allowedRoles={['parent']}>
           <ParentLayout />
         </RoleGuard>
       </ProtectedRoute>
@@ -143,9 +149,14 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Fallback
+  // 404 Catch-All Route
   {
-    path: '*',
-    element: <Navigate to="/" replace />,
+    element: <MainLayout />,
+    children: [
+      {
+        path: '*',
+        element: <NotFoundPage />,
+      },
+    ],
   },
 ]);

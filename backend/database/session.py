@@ -3,12 +3,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from core.config import settings
 
-# Engine configuration with pooling suitable for production
+is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+connect_args = {"check_same_thread": False} if is_sqlite else {}
+pool_kwargs = {} if is_sqlite else {"pool_pre_ping": True, "pool_recycle": 3600}
+
+# Engine configuration with pooling suitable for production or SQLite for local development
 engine = create_engine(
     settings.DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=3600,
+    connect_args=connect_args,
     echo=False,
+    **pool_kwargs,
 )
 
 SessionLocal = sessionmaker(

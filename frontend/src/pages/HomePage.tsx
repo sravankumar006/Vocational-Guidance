@@ -1,5 +1,4 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { Card } from '@/components/ui/Card';
@@ -19,6 +18,13 @@ import {
 export const HomePage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const { t, language } = useLanguage();
+
+  // If already authenticated, redirect appropriately to the user's role workspace
+  if (isAuthenticated && user) {
+    if (user.role === 'student') return <Navigate to="/student" replace />;
+    if (user.role === 'parent') return <Navigate to="/parent" replace />;
+    if (user.role === 'admin') return <Navigate to="/admin" replace />;
+  }
 
   return (
     <div className="space-y-12 max-w-6xl mx-auto py-4">

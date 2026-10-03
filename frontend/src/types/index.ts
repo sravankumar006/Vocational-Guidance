@@ -51,3 +51,6 @@ export interface SelectOption {
 }
 
 export type Language = 'en' | 'te';
+
+export * from './student';
+export * from './career';

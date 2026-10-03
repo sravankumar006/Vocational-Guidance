@@ -5,6 +5,7 @@ from api.routers.student import router as student_router
 from api.routers.parent import router as parent_router
 from api.routers.counselling import router as counselling_router
 from api.routers.admin import router as admin_router
+from api.routers.careers import router as careers_router
 
 api_router = APIRouter()
 
@@ -17,6 +18,7 @@ def api_health() -> HealthStatus:
 # Register all architectural placeholder routers
 api_router.include_router(auth_router)
 api_router.include_router(student_router)
+api_router.include_router(careers_router)
 api_router.include_router(parent_router)
 api_router.include_router(counselling_router)
 api_router.include_router(admin_router)

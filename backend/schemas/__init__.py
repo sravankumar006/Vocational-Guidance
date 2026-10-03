@@ -1,4 +1,45 @@
-"""Pydantic schemas package."""
 from schemas.health import HealthStatus
+from schemas.student import (
+    StudentDashboardResponse,
+    StudentProfileSummary,
+    CurrentCareerInfo,
+    RecommendedCareerInfo,
+    CounsellingSessionSummary,
+    FamilyStatusInfo,
+    StudentProfileDetailResponse,
+    StudentProfileUpdateRequest,
+)
+from schemas.career import (
+    CareerIntentUpdateRequest,
+    CareerIntentResponse,
+    CareerSummary,
+    CareerDetailResponse,
+    CareerSearchResponse,
+    CareerFilterOptions,
+    VALID_CAREER_INTENTS,
+    FactorEvaluation,
+    CareerRecommendationItem,
+    CareerRecommendationsResponse,
+)
 
-__all__ = ["HealthStatus"]
+__all__ = [
+    "HealthStatus",
+    "StudentDashboardResponse",
+    "StudentProfileSummary",
+    "CurrentCareerInfo",
+    "RecommendedCareerInfo",
+    "CounsellingSessionSummary",
+    "FamilyStatusInfo",
+    "StudentProfileDetailResponse",
+    "StudentProfileUpdateRequest",
+    "CareerIntentUpdateRequest",
+    "CareerIntentResponse",
+    "CareerSummary",
+    "CareerDetailResponse",
+    "CareerSearchResponse",
+    "CareerFilterOptions",
+    "VALID_CAREER_INTENTS",
+    "FactorEvaluation",
+    "CareerRecommendationItem",
+    "CareerRecommendationsResponse",
+]

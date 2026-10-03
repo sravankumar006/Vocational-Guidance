@@ -1,36 +1,48 @@
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
+"""
+Pydantic schemas for authentication and authorization (Phase 1 Brick 7).
+Ensures passwords, hashes, and internal secrets are NEVER returned in API responses.
+"""
+
+from typing import Optional, List
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class LoginRequest(BaseModel):
-    identifier: Optional[str] = Field(None, description="Email, phone, or username")
-    password: Optional[str] = Field(None, description="Password")
-    role: Optional[str] = Field(None, description="Direct role select (student, parent, admin)")
+    """Payload for user login."""
+    identifier: str = Field(..., description="Email address or phone number")
+    password: str = Field(..., min_length=1, description="Account password")
 
 
-class UserSummary(BaseModel):
+class RefreshTokenRequest(BaseModel):
+    """Payload for token refresh when cookies are not used."""
+    refresh_token: Optional[str] = Field(None, description="Optional raw refresh token if not in cookie")
+
+
+class SafeUserResponse(BaseModel):
+    """
+    Sanitized user identity representation.
+    Guaranteed to exclude password hashes, internal secrets, and sensitive tokens.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
     role: str
-    family_id: Optional[str] = None
-    student_id: Optional[int] = None
-    linked_student_name: Optional[str] = None
-    relationship_to_student: Optional[str] = None
-    education_level: Optional[str] = None
-    district: Optional[str] = None
-    state: Optional[str] = None
-    title: Optional[str] = None
-    department: Optional[str] = None
+    is_active: bool
+    student_profile_id: Optional[int] = None
+    parent_profile_id: Optional[int] = None
+    associated_student_ids: List[int] = Field(default_factory=list)
 
 
-class LoginResponse(BaseModel):
+class TokenResponse(BaseModel):
+    """Authentication response payload containing access token and safe identity metadata."""
     access_token: str
     token_type: str = "bearer"
-    user: UserSummary
+    user: SafeUserResponse
 
 
-class LogoutResponse(BaseModel):
-    status: str = "ok"
-    message: str = "Logged out successfully"
+class MessageResponse(BaseModel):
+    """Generic status/message response."""
+    detail: str

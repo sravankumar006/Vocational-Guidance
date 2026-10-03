@@ -4,7 +4,13 @@ import { AuthResponse, User, UserRole } from '@/types';
 const TOKEN_KEY = 'sih_auth_token';
 const USER_KEY = 'sih_auth_user';
 
-// Built-in verified identity personas for rapid developer pair testing and offline resiliency
+// Built-in verified identity personas for rapid developer testing & offline fallback
+const FALLBACK_CREDENTIALS: Record<UserRole, { identifier: string; defaultPass: string }> = {
+  student: { identifier: 'student@sih.gov.in', defaultPass: 'Margadarshak@2026' },
+  parent: { identifier: 'parent@sih.gov.in', defaultPass: 'Margadarshak@2026' },
+  admin: { identifier: 'admin@sih.gov.in', defaultPass: 'Margadarshak@2026' },
+};
+
 const FALLBACK_PERSONAS: Record<UserRole, User> = {
   student: {
     id: 1,
@@ -44,36 +50,62 @@ const FALLBACK_PERSONAS: Record<UserRole, User> = {
 
 export const authService = {
   async login(identifier?: string, password?: string, role?: UserRole): Promise<AuthResponse> {
+    // If role is passed directly (quick dev switch button), use the default seeded credentials
+    const targetId = identifier || (role ? FALLBACK_CREDENTIALS[role].identifier : '');
+    const targetPass = password || (role ? FALLBACK_CREDENTIALS[role].defaultPass : '');
+
     try {
       const response = await apiClient<AuthResponse>('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ identifier, password, role }),
-        timeout: 2000,
+        body: JSON.stringify({ identifier: targetId, password: targetPass }),
+        timeout: 10000,
       });
+
       if (response && response.access_token) {
         localStorage.setItem(TOKEN_KEY, response.access_token);
         localStorage.setItem(USER_KEY, JSON.stringify(response.user));
         return response;
       }
       throw new Error('Invalid response structure from auth endpoint');
-    } catch {
-      // Offline fallback ensuring developer pair testing is always resilient
-      const selectedRole: UserRole =
+    } catch (err: any) {
+      // If the error was a real backend authentication rejection (401/403/invalid password),
+      // bubble it up to the user so they see the real credential error!
+      const errorMsg = err.message || '';
+      if (
+        errorMsg.includes('Invalid credentials') ||
+        errorMsg.includes('inactive') ||
+        errorMsg.includes('401') ||
+        errorMsg.includes('403')
+      ) {
+        throw err;
+      }
+
+      // Offline dev fallback if network/connection failed or server timed out
+      const cleanId = (targetId || '').toLowerCase().trim();
+      const detectedRole: UserRole | undefined =
         role ||
-        (identifier?.toLowerCase().includes('parent')
+        (cleanId.includes('student')
+          ? 'student'
+          : cleanId.includes('parent')
           ? 'parent'
-          : identifier?.toLowerCase().includes('admin')
+          : cleanId.includes('admin')
           ? 'admin'
-          : 'student');
-      const mockUser = FALLBACK_PERSONAS[selectedRole];
-      const mockToken = `mock-jwt-token-for-${selectedRole}-${Date.now()}`;
-      localStorage.setItem(TOKEN_KEY, mockToken);
-      localStorage.setItem(USER_KEY, JSON.stringify(mockUser));
-      return {
-        access_token: mockToken,
-        token_type: 'bearer',
-        user: mockUser,
-      };
+          : undefined);
+
+      if (detectedRole && FALLBACK_PERSONAS[detectedRole]) {
+        console.warn(`[AuthService] Backend request failed (${errorMsg}). Falling back to local persona for '${detectedRole}'.`);
+        const mockUser = FALLBACK_PERSONAS[detectedRole];
+        const mockToken = `mock-jwt-token-for-${detectedRole}-${Date.now()}`;
+        localStorage.setItem(TOKEN_KEY, mockToken);
+        localStorage.setItem(USER_KEY, JSON.stringify(mockUser));
+        return {
+          access_token: mockToken,
+          token_type: 'bearer',
+          user: mockUser,
+        };
+      }
+
+      throw err;
     }
   },
 
@@ -90,34 +122,66 @@ export const authService = {
     return localStorage.getItem(TOKEN_KEY);
   },
 
+  async refreshToken(): Promise<string | null> {
+    try {
+      const response = await apiClient<AuthResponse>('/api/auth/refresh', {
+        method: 'POST',
+        timeout: 2500,
+      });
+      if (response && response.access_token) {
+        localStorage.setItem(TOKEN_KEY, response.access_token);
+        if (response.user) {
+          localStorage.setItem(USER_KEY, JSON.stringify(response.user));
+        }
+        return response.access_token;
+      }
+    } catch {
+      this.clearSession();
+    }
+    return null;
+  },
+
   async fetchMe(): Promise<User | null> {
     const token = this.getToken();
     if (!token) return null;
 
-    // Instant resolution for offline/mock tokens
     if (token.startsWith('mock-')) {
       return this.getCurrentUser();
     }
 
     try {
-      const user = await apiClient<User>('/api/auth/me', { timeout: 1500 });
+      const user = await apiClient<User>('/api/auth/me', { timeout: 2000 });
       if (user) {
         localStorage.setItem(USER_KEY, JSON.stringify(user));
         return user;
       }
-    } catch {
-      // Fallback to cached user if network is slow or backend is offline
+    } catch (err: any) {
+      // If unauthorized, attempt to use refresh token session to seamlessly recover
+      if (err.message && (err.message.includes('401') || err.message.includes('expired'))) {
+        const newToken = await this.refreshToken();
+        if (newToken) {
+          try {
+            return await apiClient<User>('/api/auth/me', { timeout: 2000 });
+          } catch {
+            return null;
+          }
+        }
+      }
       return this.getCurrentUser();
     }
     return this.getCurrentUser();
   },
 
+  clearSession(): void {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  },
+
   async logout(): Promise<void> {
     try {
-      await apiClient('/api/auth/logout', { method: 'POST', timeout: 1000 }).catch(() => {});
+      await apiClient('/api/auth/logout', { method: 'POST', timeout: 1500 }).catch(() => {});
     } finally {
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(USER_KEY);
+      this.clearSession();
     }
   },
 };

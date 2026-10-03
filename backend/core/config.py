@@ -34,8 +34,14 @@ class Settings(BaseSettings):
     # Custom / Self-Hosted Model Configuration
     OWN_MODEL_URL: str = ""
 
+    # Authentication & Session Security (Phase 1 Brick 7)
+    AUTH_SECRET_KEY: str = "insecure-dev-secret-change-in-production"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    FRONTEND_URL: str = "http://localhost:5173"
+
     model_config = SettingsConfigDict(
-        env_file=[".env", "../.env"],
+        env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore"

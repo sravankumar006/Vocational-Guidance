@@ -1,224 +1,537 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
-import { useLanguage } from '@/context/LanguageContext';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { StatCard } from '@/components/ui/StatCard';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
-import { Section } from '@/components/ui/Section';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { studentService } from '@/services/studentService';
+import { StudentDashboardData } from '@/types/student';
 import {
   Compass,
-  Briefcase,
-  TrendingUp,
-  Award,
-  Users,
+  BookOpen,
   MessageSquare,
+  Users,
+  ShieldCheck,
   ArrowRight,
+  Sparkles,
+  MapPin,
+  GraduationCap,
+  Clock,
 } from 'lucide-react';
 
 export const StudentHome: React.FC = () => {
-  const { user } = useAuth();
-  const { t } = useLanguage();
+  const navigate = useNavigate();
+  const [dashboardData, setDashboardData] = useState<StudentDashboardData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`${t('studentWelcome')}, ${user?.name || 'Aarav'}!`}
-        subtitle="Empirical career pathways and family alignment powered by 10,000+ verified vocational training benchmarks."
-        badge={<StatusBadge status="success" label="Active Learner" />}
-        actions={
-          <Link to="/student/counselling">
-            <Button
-              variant="primary"
-              size="md"
-              leftIcon={<MessageSquare className="h-4 w-4" />}
-            >
-              Start AI Guidance Session
-            </Button>
-          </Link>
-        }
-      />
+  const fetchDashboard = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await studentService.getDashboard();
+      setDashboardData(data);
+    } catch (err: any) {
+      setError(
+        err.message ||
+          'Failed to load student dashboard data. Please verify your connection.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-      {/* Top Key Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Recommended Trade"
-          value="Solar PV"
-          subtext="Green Energy & Electrical"
-          icon={<Compass className="h-5 w-5" />}
-        />
-        <StatCard
-          label="Placement Rate"
-          value="84.2%"
-          subtext="Empirical Benchmark"
-          trend={{ value: "+4.1% vs avg", isPositive: true }}
-          icon={<TrendingUp className="h-5 w-5" />}
-        />
-        <StatCard
-          label="Median Starting Salary"
-          value="₹19,500"
-          subtext="Per month (Certified Trainees)"
-          icon={<Briefcase className="h-5 w-5" />}
-        />
-        <StatCard
-          label="Family Status"
-          value="Aligned"
-          subtext="Parent shared consent"
-          icon={<Users className="h-5 w-5" />}
-          badge={<StatusBadge status="success" label="Verified" />}
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
+
+  if (loading) {
+    return <LoadingState message="Loading your student workspace..." fullHeight />;
+  }
+
+  if (error || !dashboardData) {
+    return (
+      <div className="py-8 max-w-4xl mx-auto">
+        <ErrorState
+          title="Student Dashboard Unavailable"
+          message={error || 'Unable to retrieve your student records at this time.'}
+          onRetry={fetchDashboard}
         />
       </div>
+    );
+  }
 
-      {/* Primary Vocational Pathway Card */}
-      <Section
-        title="Active Career Exploration"
-        description="Your primary trade track and academic credit progression milestones"
-      >
-        <Card padding="lg" className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <StatusBadge status="info" label="NSQF Level 4" />
-                <span className="text-xs text-text-muted">• 6 Months Duration</span>
-              </div>
-              <h3 className="text-lg font-semibold text-text-primary">
-                Solar PV Installation & Maintenance Technician
-              </h3>
-              <p className="text-sm text-text-secondary">
-                Offered by National Skill Training Institute (NSTI), Hyderabad with industry apprenticeship.
-              </p>
-            </div>
+  const {
+    profile,
+    current_career,
+    recommended_careers,
+    latest_counselling_session,
+    family_status,
+  } = dashboardData;
 
-            <div className="shrink-0 flex items-center gap-2">
-              <Link to="/student/career">
-                <Button variant="outline" size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
-                  Explore Details
-                </Button>
-              </Link>
-            </div>
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return null;
+    try {
+      const d = new Date(dateString);
+      return d.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  return (
+    <div className="space-y-6 max-w-6xl mx-auto pb-10">
+      {/* 1. Header & Identity Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border/40">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-text-primary tracking-tight">
+              Student Dashboard
+            </h1>
+            <StatusBadge status="neutral" label="Student Portal" withDot={false} />
           </div>
+          <p className="text-sm text-text-secondary mt-1">
+            Welcome back, <span className="font-semibold text-text-primary">{profile.name}</span>. Review your profile readiness, career exploration track, and family guidance context.
+          </p>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-border/40">
-            <div className="p-3 rounded-lg bg-white/[0.02] border border-border/30">
-              <div className="text-xs text-text-muted">Top Recruiting Sector</div>
-              <div className="text-sm font-medium text-text-primary mt-0.5">
-                Renewable Energy EPCs
-              </div>
-            </div>
-            <div className="p-3 rounded-lg bg-white/[0.02] border border-border/30">
-              <div className="text-xs text-text-muted">Apprenticeship Stipend</div>
-              <div className="text-sm font-medium text-text-primary mt-0.5">
-                ₹8,500 - ₹11,000 / month
-              </div>
-            </div>
-            <div className="p-3 rounded-lg bg-white/[0.02] border border-border/30">
-              <div className="text-xs text-text-muted">Higher Degree Route</div>
-              <div className="text-sm font-medium text-text-primary mt-0.5">
-                Eligible for B.Voc (Electrical)
-              </div>
-            </div>
-          </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/student/profile')}
+            leftIcon={<GraduationCap className="h-3.5 w-3.5" />}
+          >
+            My Profile
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => navigate('/student/career')}
+            rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+          >
+            Explore Careers
+          </Button>
+        </div>
+      </div>
 
-          <div className="pt-1">
-            <ProgressBar
-              value={65}
-              label="Vocational Readiness & Assessment Completion"
-              showPercent
-              variant="success"
-            />
-          </div>
-        </Card>
-      </Section>
-
-      {/* Dual Column: Family Harmony & Quick Discovery */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Family Harmony Card */}
-        <Card padding="md" className="space-y-3.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-white/[0.04] text-text-secondary">
-                <Users className="h-5 w-5" />
+      {/* 2. Profile Summary Card (Compact, Non-sensitive) */}
+      <Card padding="lg" className="border-border/60 bg-background-card/50">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+          {/* Left: Identity Details */}
+          <div className="lg:col-span-2 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-xl bg-white/[0.04] border border-border/70 flex items-center justify-center font-bold text-lg text-text-primary shrink-0">
+                {profile.name.charAt(0)}
               </div>
-              <div>
-                <h4 className="text-sm font-semibold text-text-primary">
-                  Family Decision Alignment
-                </h4>
-                <p className="text-xs text-text-secondary">
-                  Linked parent account: Sunita Sharma (Mother)
-                </p>
-              </div>
-            </div>
-            <StatusBadge status="success" label="Connected" />
-          </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-semibold text-text-primary">
+                    {profile.name}
+                  </h2>
+                  {profile.education_level && (
+                    <Badge variant="default" size="sm">
+                      {profile.education_level}
+                    </Badge>
+                  )}
+                  {profile.education_stream && (
+                    <Badge variant="outline" size="sm">
+                      {profile.education_stream}
+                    </Badge>
+                  )}
+                </div>
 
-          <div className="p-3 rounded-lg bg-white/[0.02] border border-border/30 text-xs text-text-secondary space-y-1.5">
-            <div className="flex items-center justify-between text-text-primary font-medium">
-              <span>Parent's Primary Inquiry:</span>
-              <span className="text-emerald-400">Addressed by Data</span>
-            </div>
-            <p className="leading-relaxed">
-              "Is the job permanent and safe?" — Answered via government verified placement reports with 84% placement rate in Telangana and neighboring states.
-            </p>
-          </div>
-
-          <div className="flex items-center justify-end">
-            <Link to="/parent">
-              <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
-                View Family Perspective
-              </Button>
-            </Link>
-          </div>
-        </Card>
-
-        {/* Explore Verified Trades */}
-        <Card padding="md" className="space-y-3.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-white/[0.04] text-text-secondary">
-                <Award className="h-5 w-5" />
-              </div>
-              <div>
-                <h4 className="text-sm font-semibold text-text-primary">
-                  Verified Vocational Trades
-                </h4>
-                <p className="text-xs text-text-secondary">
-                  From official DGT & NSDC empirical dataset
-                </p>
-              </div>
-            </div>
-            <span className="text-xs text-text-muted font-medium">15 Trades</span>
-          </div>
-
-          <div className="space-y-1.5">
-            {[
-              { name: 'Electrician (Domestic & Industrial)', salary: '₹19,000/mo', placement: '86%' },
-              { name: 'CNC Machine Operator & Programmer', salary: '₹22,000/mo', placement: '91%' },
-              { name: 'Automotive Service Technician', salary: '₹18,500/mo', placement: '82%' },
-            ].map((trade, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-border/20 text-xs"
-              >
-                <div className="font-medium text-text-primary">{trade.name}</div>
-                <div className="flex items-center gap-3 text-text-muted">
-                  <span>{trade.salary}</span>
-                  <span className="text-emerald-400 font-medium">{trade.placement}</span>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-secondary">
+                  {profile.email && <span>{profile.email}</span>}
+                  {profile.phone && <span>{profile.phone}</span>}
+                  {profile.location && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3 text-text-muted" />
+                      {profile.location}
+                    </span>
+                  )}
                 </div>
               </div>
-            ))}
+            </div>
+
+            {/* Tags for Interests & Skills */}
+            <div className="pt-2 flex flex-wrap gap-2 text-xs">
+              {profile.interests.map((interest) => (
+                <span
+                  key={interest}
+                  className="px-2 py-0.5 rounded-md bg-white/[0.03] border border-border/50 text-text-secondary"
+                >
+                  {interest}
+                </span>
+              ))}
+              {profile.skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="px-2 py-0.5 rounded-md bg-white/[0.03] border border-border/50 text-text-secondary"
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
           </div>
 
-          <div className="flex items-center justify-end">
-            <Link to="/student/career">
-              <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
-                View All 15 Trades
-              </Button>
-            </Link>
+          {/* Right: Profile Readiness Checklist */}
+          <div className="border-t lg:border-t-0 lg:border-l border-border/40 pt-4 lg:pt-0 lg:pl-6 space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-text-secondary">Profile Readiness</span>
+              <span className="font-semibold text-text-primary">
+                {profile.profile_completion_percentage}%
+              </span>
+            </div>
+            <ProgressBar
+              value={profile.profile_completion_percentage}
+              variant="primary"
+              size="md"
+            />
+            <p className="text-[11px] text-text-muted leading-relaxed">
+              Based on education level, location, vocational interests, and verified technical skills.
+            </p>
           </div>
-        </Card>
+        </div>
+      </Card>
+
+      {/* 3. Primary Dashboard Grid (Career & Recommendations vs Counselling & Family) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column: Career Center (7 cols on lg) */}
+        <div className="lg:col-span-7 space-y-6">
+          {/* Current Career Section */}
+          <Card padding="lg" className="border-border/60">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-border/30">
+              <div className="flex items-center gap-2">
+                <Compass className="h-4 w-4 text-text-muted" />
+                <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                  Current Career Selection
+                </h3>
+              </div>
+              <StatusBadge
+                status={current_career ? 'success' : 'neutral'}
+                label={current_career ? 'Selected' : 'None Selected'}
+              />
+            </div>
+
+            {current_career ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-border/50 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="text-base font-bold text-text-primary">
+                      {current_career.name}
+                    </h4>
+                    {current_career.sector && (
+                      <Badge variant="outline" size="sm">
+                        {current_career.sector}
+                      </Badge>
+                    )}
+                  </div>
+                  {current_career.description && (
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                      {current_career.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/student/career')}
+                    rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+                  >
+                    View Career Blueprint
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <EmptyState
+                icon={<Compass className="h-6 w-6 text-text-muted" />}
+                title="No Career Selected Yet"
+                description="You haven't committed to an active vocational trade track yet. Browse 10,000+ verified job outcomes, certified providers, and curriculum roadmaps."
+                action={
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => navigate('/student/career')}
+                    leftIcon={<BookOpen className="h-3.5 w-3.5" />}
+                  >
+                    Explore 15 Vocational Trades
+                  </Button>
+                }
+              />
+            )}
+          </Card>
+
+          {/* Recommended Careers Section */}
+          <Card padding="lg" className="border-border/60">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-border/30">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-text-muted" />
+                <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                  Recommended Careers
+                </h3>
+              </div>
+              <Badge variant="outline" size="sm">
+                Aptitude Matching
+              </Badge>
+            </div>
+
+            {recommended_careers.length > 0 ? (
+              <div className="space-y-3">
+                {recommended_careers.map((career) => (
+                  <div
+                    key={career.id}
+                    className="p-3.5 rounded-lg bg-white/[0.02] border border-border/40 flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <h4 className="text-sm font-semibold text-text-primary">
+                        {career.name}
+                      </h4>
+                      {career.sector && (
+                        <span className="text-xs text-text-muted">{career.sector}</span>
+                      )}
+                      {career.match_reason && (
+                        <p className="text-xs text-text-secondary mt-1">
+                          {career.match_reason}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate('/student/career')}
+                    >
+                      Inspect
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={<Sparkles className="h-6 w-6 text-text-muted" />}
+                title="Career Recommendations Pending"
+                description="Career recommendations will appear here after your profile, vocational interests, and aptitude assessments are analyzed."
+                action={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/student/career')}
+                    rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+                  >
+                    Browse Trades Catalog
+                  </Button>
+                }
+              />
+            )}
+          </Card>
+        </div>
+
+        {/* Right Column: Counselling & Family Context (5 cols on lg) */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Counselling Continuation Card */}
+          <Card padding="lg" className="border-border/60">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-border/30">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-text-muted" />
+                <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                  Counselling Advisory
+                </h3>
+              </div>
+              <StatusBadge
+                status={latest_counselling_session ? 'success' : 'neutral'}
+                label={
+                  latest_counselling_session
+                    ? latest_counselling_session.status
+                    : 'Not Started'
+                }
+              />
+            </div>
+
+            {latest_counselling_session ? (
+              <div className="space-y-4">
+                <div className="p-3.5 rounded-lg bg-white/[0.02] border border-border/40 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-text-secondary">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-text-muted" />
+                      Started: {formatDate(latest_counselling_session.started_at)}
+                    </span>
+                    <span>
+                      {latest_counselling_session.message_count} message
+                      {latest_counselling_session.message_count === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  {latest_counselling_session.last_message_preview && (
+                    <div className="text-xs text-text-secondary italic border-l-2 border-border/60 pl-2.5 py-0.5">
+                      "{latest_counselling_session.last_message_preview}..."
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => navigate('/student/counselling')}
+                  rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+                >
+                  Continue Counselling Session
+                </Button>
+              </div>
+            ) : (
+              <EmptyState
+                icon={<MessageSquare className="h-6 w-6 text-text-muted" />}
+                title="Start Advisory Session"
+                description="Engage in AI-assisted vocational counselling to clarify course stability, fee structures, and career advancement."
+                action={
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => navigate('/student/counselling')}
+                  >
+                    Start First Session
+                  </Button>
+                }
+              />
+            )}
+          </Card>
+
+          {/* Parent / Family Status Card */}
+          <Card padding="lg" className="border-border/60">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-border/30">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-text-muted" />
+                <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                  Family Status
+                </h3>
+              </div>
+              <StatusBadge
+                status={family_status.has_linked_parent ? 'success' : 'neutral'}
+                label={
+                  family_status.has_linked_parent ? 'Connected' : 'Unlinked'
+                }
+              />
+            </div>
+
+            <div className="space-y-3">
+              {family_status.has_linked_parent ? (
+                <div className="p-3.5 rounded-lg bg-white/[0.02] border border-border/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-text-muted">
+                      Linked Guardian / Parent:
+                    </span>
+                    <span className="text-xs font-semibold text-text-primary">
+                      {family_status.parent_name || 'Associated Parent'}
+                    </span>
+                  </div>
+                  {family_status.relationship_type && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-text-muted">Relationship:</span>
+                      <span className="text-text-secondary">
+                        {family_status.relationship_type}
+                      </span>
+                    </div>
+                  )}
+                  {family_status.linked_at && (
+                    <div className="flex items-center justify-between text-[11px] text-text-muted">
+                      <span>Connected since:</span>
+                      <span>{formatDate(family_status.linked_at)}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-lg bg-white/[0.02] border border-border/40 text-xs text-text-secondary leading-relaxed">
+                  No parent account is currently linked to your student profile. Linking allows family members to participate in career discussions.
+                </div>
+              )}
+
+              <p className="text-[11px] text-text-muted leading-relaxed">
+                Family context allows parents to review career guidance without disclosing sensitive Aadhaar or personal financial details.
+              </p>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* 4. Quick Actions Utility Grid */}
+      <Card padding="lg" className="border-border/60">
+        <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider mb-4">
+          Quick Actions
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/student/career')}
+            className="flex items-start gap-3 p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-border/40 hover:border-border/80 transition-all text-left group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-white/[0.03] border border-border/60 flex items-center justify-center shrink-0">
+              <Compass className="h-4 w-4 text-text-muted group-hover:text-text-primary transition-colors" />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-text-primary group-hover:text-text-primary">
+                Explore Careers
+              </div>
+              <div className="text-[11px] text-text-muted mt-0.5 leading-snug">
+                Browse 15 vocational trades, verified wage benchmarks, and courses.
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/student/profile')}
+            className="flex items-start gap-3 p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-border/40 hover:border-border/80 transition-all text-left group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-white/[0.03] border border-border/60 flex items-center justify-center shrink-0">
+              <GraduationCap className="h-4 w-4 text-text-muted group-hover:text-text-primary transition-colors" />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-text-primary group-hover:text-text-primary">
+                View Profile
+              </div>
+              <div className="text-[11px] text-text-muted mt-0.5 leading-snug">
+                Review your academic level, stream, technical skills, and trade interests.
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/student/counselling')}
+            className="flex items-start gap-3 p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-border/40 hover:border-border/80 transition-all text-left group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-white/[0.03] border border-border/60 flex items-center justify-center shrink-0">
+              <MessageSquare className="h-4 w-4 text-text-muted group-hover:text-text-primary transition-colors" />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-text-primary group-hover:text-text-primary">
+                Counselling Advisory
+              </div>
+              <div className="text-[11px] text-text-muted mt-0.5 leading-snug">
+                Engage in bilingual career advisory sessions to clarify pathway doubts.
+              </div>
+            </div>
+          </button>
+        </div>
+      </Card>
+
+      {/* 5. Architectural Compliance & Privacy Guardrail Notice */}
+      <div className="p-3.5 rounded-xl bg-white/[0.01] border border-border/30 flex items-center gap-2.5 text-xs text-text-muted">
+        <ShieldCheck className="h-4 w-4 text-text-secondary shrink-0" />
+        <span>
+          <strong className="text-text-secondary">Security & Privacy Guardrail: </strong>
+          Dashboard context is derived strictly on the server from the authenticated JWT session. Zero Aadhaar or sensitive identification data is stored, requested, or returned.
+        </span>
       </div>
     </div>
   );

@@ -2,30 +2,30 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { NavigationItem } from '@/types';
-import { LayoutDashboard, BarChart3, Database, AlertTriangle } from 'lucide-react';
+import { Home, BarChart3, Database, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export const AdminLayout: React.FC = () => {
   const { user } = useAuth();
 
   const adminNavItems: NavigationItem[] = [
-    { label: 'Overview', labelTe: 'స్థూల దృష్టి', href: '/admin', icon: LayoutDashboard },
+    { label: 'Home', labelTe: 'హోమ్', href: '/admin', icon: Home },
     { label: 'Analytics', labelTe: 'గణాంకాలు', href: '/admin/analytics', icon: BarChart3 },
-    { label: 'Data Management', labelTe: 'డేటా నిర్వహణ', href: '/admin/data', icon: Database, badge: '10K Recs' },
-    { label: 'Human Escalations', labelTe: 'కౌన్సిలర్ సంప్రదింపులు', href: '/admin/escalations', icon: AlertTriangle, badge: '3 Open' },
+    { label: 'Data', labelTe: 'డేటా నిర్వహణ', href: '/admin/data', icon: Database },
+    { label: 'Escalations', labelTe: 'కౌన్సిలర్ సంప్రదింపులు', href: '/admin/escalations', icon: AlertTriangle },
   ];
 
   return (
     <AppShell
       navigationItems={adminNavItems}
-      sidebarTitle="Platform Administration"
+      sidebarTitle="Administration Workspace"
       sidebarFooter={
-        <div className="space-y-1 text-xs">
-          <div className="font-semibold text-text-primary">SIH26241 Portal</div>
-          <div className="text-[11px] text-text-muted">
-            Authenticated: {user?.name || 'Administrator'}
+        user ? (
+          <div className="space-y-1">
+            <div className="text-[11px] font-medium text-text-primary">{user.name}</div>
+            <div className="text-[10px] text-text-muted capitalize">Role: {user.role}</div>
           </div>
-        </div>
+        ) : undefined
       }
     >
       <Outlet />

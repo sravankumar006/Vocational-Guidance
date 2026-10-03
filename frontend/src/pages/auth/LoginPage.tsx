@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -10,7 +10,7 @@ import { UserRole } from '@/types';
 import { Compass, Users, Shield, Lock, User as UserIcon } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { login, loading } = useAuth();
+  const { user, isAuthenticated, login, loading } = useAuth();
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
@@ -18,6 +18,15 @@ export const LoginPage: React.FC = () => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // If already authenticated, redirect to appropriate role portal
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (user.role === 'student') navigate('/student', { replace: true });
+      else if (user.role === 'parent') navigate('/parent', { replace: true });
+      else if (user.role === 'admin') navigate('/admin', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const redirectByRole = (role: UserRole) => {
     const fromPath = (location.state as any)?.from?.pathname;
@@ -41,35 +50,36 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
+    if (!password) {
+      setErrorMsg('Please enter your password');
+      return;
+    }
+
     try {
-      const user = await login(identifier, password);
-      redirectByRole(user.role);
+      const authenticatedUser = await login(identifier, password);
+      redirectByRole(authenticatedUser.role);
     } catch (err: any) {
       setErrorMsg(err.message || 'Unable to authenticate. Please check your credentials.');
     }
   };
 
-  const handleQuickRole = async (role: UserRole) => {
+  const fillTestCredentials = (id: string, pass: string) => {
+    setIdentifier(id);
+    setPassword(pass);
     setErrorMsg(null);
-    try {
-      const user = await login(undefined, undefined, role);
-      redirectByRole(user.role);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Quick login failed');
-    }
   };
 
   return (
     <Card padding="lg" className="border-border/60 shadow-glass">
       {/* Title & Platform Identity */}
       <div className="text-center mb-6 space-y-1">
-        <h2 className="text-xl font-bold text-text-primary tracking-tight">
+        <h1 className="text-xl font-bold text-text-primary tracking-tight">
           {language === 'te' ? 'మార్గదర్శక్ పోర్టల్ లాగిన్' : 'Sign In to Margadarshak'}
-        </h2>
+        </h1>
         <p className="text-xs text-text-secondary">
           {language === 'te'
             ? 'విద్యార్థులు మరియు కుటుంబాలకు వృత్తి విద్యా మార్గదర్శనం'
-            : 'Career guidance for students and families'}
+            : 'Career guidance for students, parents, and administrators'}
         </p>
       </div>
 
@@ -111,37 +121,37 @@ export const LoginPage: React.FC = () => {
         </Button>
       </form>
 
-      {/* Quick Role Access for Seamless Pairwise Collaboration */}
+      {/* Development Account Quick-Fill */}
       <div className="mt-6 pt-5 border-t border-border/30">
         <div className="text-[11px] font-medium uppercase tracking-wider text-text-muted text-center mb-2.5">
-          {language === 'te' ? 'త్వరిత ప్రాప్యత (పరీక్ష కోసం)' : 'Quick Role Access'}
+          {language === 'te' ? 'పరీక్ష ఖాతా ఆధారాలు' : 'Fill Development Credentials'}
         </div>
         <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
-            onClick={() => handleQuickRole('student')}
+            onClick={() => fillTestCredentials('student@sih.gov.in', 'Margadarshak@2026')}
             className="flex flex-col items-center justify-center p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] border border-border/30 hover:border-border/60 text-text-secondary hover:text-text-primary transition-all text-center"
           >
             <Compass className="h-4 w-4 mb-1 text-slate-400" />
-            <span className="text-xs font-medium">{t('studentRole')}</span>
+            <span className="text-xs font-medium">Student</span>
           </button>
 
           <button
             type="button"
-            onClick={() => handleQuickRole('parent')}
+            onClick={() => fillTestCredentials('parent@sih.gov.in', 'Margadarshak@2026')}
             className="flex flex-col items-center justify-center p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] border border-border/30 hover:border-border/60 text-text-secondary hover:text-text-primary transition-all text-center"
           >
             <Users className="h-4 w-4 mb-1 text-slate-400" />
-            <span className="text-xs font-medium">{t('parentRole')}</span>
+            <span className="text-xs font-medium">Parent</span>
           </button>
 
           <button
             type="button"
-            onClick={() => handleQuickRole('admin')}
+            onClick={() => fillTestCredentials('admin@sih.gov.in', 'Margadarshak@2026')}
             className="flex flex-col items-center justify-center p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] border border-border/30 hover:border-border/60 text-text-secondary hover:text-text-primary transition-all text-center"
           >
             <Shield className="h-4 w-4 mb-1 text-slate-400" />
-            <span className="text-xs font-medium">{t('adminRole')}</span>
+            <span className="text-xs font-medium">Admin</span>
           </button>
         </div>
       </div>
