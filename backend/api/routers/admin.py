@@ -7,7 +7,7 @@ and human escalation management.
 
 import re
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, cast, Date, or_
@@ -1604,4 +1604,355 @@ def get_admin_analytics_sentiment(
         career_id=career_id,
         language=language,
     ).sentiment
+
+
+# =========================================================================
+# 8. Geographic Concentration Analytics (A5 — Geographic Analytics)
+# =========================================================================
+
+STATE_TO_REGION = {
+    "Telangana": "South Region",
+    "Andhra Pradesh": "South Region",
+    "Karnataka": "South Region",
+    "Tamil Nadu": "South Region",
+    "Kerala": "South Region",
+    "Maharashtra": "West Region",
+    "Gujarat": "West Region",
+    "Goa": "West Region",
+    "Rajasthan": "North Region",
+    "Delhi": "North Region",
+    "Punjab": "North Region",
+    "Haryana": "North Region",
+    "Uttar Pradesh": "North Region",
+    "Uttarakhand": "North Region",
+    "Himachal Pradesh": "North Region",
+    "Jammu & Kashmir": "North Region",
+    "Bihar": "East Region",
+    "West Bengal": "East Region",
+    "Odisha": "East Region",
+    "Jharkhand": "East Region",
+    "Assam": "North-East Region",
+    "Madhya Pradesh": "Central Region",
+    "Chhattisgarh": "Central Region",
+}
+
+KNOWN_STATES = {
+    "telangana": "Telangana",
+    "andhra pradesh": "Andhra Pradesh",
+    "andhrapradesh": "Andhra Pradesh",
+    "karnataka": "Karnataka",
+    "tamil nadu": "Tamil Nadu",
+    "kerala": "Kerala",
+    "maharashtra": "Maharashtra",
+    "gujarat": "Gujarat",
+    "rajasthan": "Rajasthan",
+    "delhi": "Delhi",
+    "punjab": "Punjab",
+    "haryana": "Haryana",
+    "uttar pradesh": "Uttar Pradesh",
+    "bihar": "Bihar",
+    "west bengal": "West Bengal",
+    "madhya pradesh": "Madhya Pradesh",
+    "chhattisgarh": "Chhattisgarh",
+    "odisha": "Odisha",
+    "assam": "Assam",
+}
+
+
+def _parse_location(loc: Optional[str]) -> Tuple[str, str, str]:
+    """
+    Parses a raw location string into (district, state, region).
+    Supports 'District, State' format and standalone state names.
+    Maps states to canonical geographic regions.
+    """
+    if not loc or not loc.strip():
+        return ("Unspecified District", "Unspecified State", "Other Region")
+
+    cleaned_raw = loc.strip()
+    parts = [p.strip() for p in cleaned_raw.split(",") if p.strip()]
+
+    if len(parts) >= 2:
+        district = parts[0].title()
+        raw_state = parts[1].strip()
+        state = KNOWN_STATES.get(raw_state.lower().replace(" ", ""), raw_state.title())
+    elif len(parts) == 1:
+        raw = parts[0]
+        normal = raw.lower().replace(" ", "")
+        if normal in KNOWN_STATES:
+            state = KNOWN_STATES[normal]
+            district = "Multi-District"
+        else:
+            state = "General"
+            district = raw.title()
+    else:
+        district = "Multi-District"
+        state = "General"
+
+    region = STATE_TO_REGION.get(state, "Other Region")
+    return (district, state, region)
+
+
+def _calculate_geographic_analytics(
+    db: Session,
+    state: Optional[str] = None,
+    district: Optional[str] = None,
+    region: Optional[str] = None,
+    career_id: Optional[int] = None,
+    concern: Optional[str] = None,
+    date_range: str = "all_time",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> GeographicAnalyticsResponse:
+    """
+    Executes server-side geographic aggregation of counselling and parent-concern activity.
+    Labels all metrics as demo/generated data.
+    """
+    start_cutoff, end_cutoff = _parse_date_filters(date_range, start_date, end_date)
+
+    # 1. Discover all locations in DB to build dynamic filter options
+    all_student_locs = db.query(StudentProfile.location).filter(StudentProfile.location.isnot(None)).all()
+    all_parent_locs = db.query(ParentProfile.location).filter(ParentProfile.location.isnot(None)).all()
+
+    discovered_states: set[str] = set()
+    discovered_districts: set[str] = set()
+    discovered_regions: set[str] = set()
+    state_to_districts_map: Dict[str, set[str]] = {}
+
+    for (loc,) in all_student_locs + all_parent_locs:
+        d, s, r = _parse_location(loc)
+        if s != "General" and s != "Unspecified State":
+            discovered_states.add(s)
+            if s not in state_to_districts_map:
+                state_to_districts_map[s] = set()
+            if d != "General" and d != "Unspecified District":
+                state_to_districts_map[s].add(d)
+        if d != "General" and d != "Unspecified District":
+            discovered_districts.add(d)
+        if r != "Other Region":
+            discovered_regions.add(r)
+
+    formatted_state_districts = {
+        k: sorted(list(v)) for k, v in state_to_districts_map.items() if v
+    }
+
+    # Available occupations and concerns
+    all_occupations = db.query(Occupation).order_by(Occupation.name).all()
+    available_careers = [FilterOptionItem(id=o.id, label=o.name) for o in all_occupations]
+
+    canonical_concern_names = [
+        "Income", "Job Security", "Further Education", "Social Perception",
+        "Distance", "Working Conditions", "Career Growth"
+    ]
+    has_other_concern = db.query(ParentConcern).filter(ParentConcern.concern_type.ilike("%other%")).count() > 0
+    available_concerns = canonical_concern_names + (["Other"] if has_other_concern else [])
+
+    # Target Career lookup if career_id provided
+    target_career_name: Optional[str] = None
+    if career_id is not None:
+        target_occ = db.query(Occupation).filter(Occupation.id == career_id).first()
+        if target_occ:
+            target_career_name = target_occ.name
+
+    # 2. Extract and Filter Activity Records
+    matched_events: List[Dict[str, Any]] = []
+
+    # A. Counselling Sessions
+    sess_query = db.query(
+        CounsellingSession.id,
+        CounsellingSession.started_at,
+        StudentProfile.location,
+        StudentProfile.career_intent,
+    ).join(StudentProfile, CounsellingSession.student_profile_id == StudentProfile.id)
+
+    if start_cutoff:
+        sess_query = sess_query.filter(CounsellingSession.started_at >= start_cutoff)
+    if end_cutoff:
+        sess_query = sess_query.filter(CounsellingSession.started_at <= end_cutoff)
+
+    for sid, s_time, s_loc, s_intent in sess_query.all():
+        d, s, r = _parse_location(s_loc)
+
+        if target_career_name:
+            matches_career = bool(s_intent and target_career_name.lower() in s_intent.lower())
+            if not matches_career:
+                has_esc_career = db.query(HumanEscalation).filter(
+                    HumanEscalation.counselling_session_id == sid,
+                    HumanEscalation.career_id == career_id,
+                ).count() > 0
+                if not has_esc_career:
+                    continue
+
+        if concern:
+            has_concern = db.query(HumanEscalation).filter(
+                HumanEscalation.counselling_session_id == sid,
+                HumanEscalation.concern.ilike(f"%{concern}%"),
+            ).count() > 0
+            if not has_concern:
+                continue
+
+        if state and s.lower() != state.lower():
+            continue
+        if district and d.lower() != district.lower():
+            continue
+        if region and r.lower() != region.lower():
+            continue
+
+        matched_events.append({
+            "type": "session",
+            "date": s_time.strftime("%Y-%m-%d") if s_time else "2026-10-01",
+            "district": d,
+            "state": s,
+            "region": r,
+            "career": s_intent or target_career_name or "General Vocational",
+            "concern": None,
+        })
+
+    # B. Parent Concerns
+    concern_query = db.query(
+        ParentConcern.id,
+        ParentConcern.created_at,
+        ParentConcern.concern_type,
+        ParentProfile.location.label("parent_loc"),
+        StudentProfile.location.label("student_loc"),
+        StudentProfile.career_intent,
+    ).outerjoin(ParentProfile, ParentConcern.parent_profile_id == ParentProfile.id)\
+     .outerjoin(StudentProfile, ParentConcern.student_profile_id == StudentProfile.id)
+
+    if start_cutoff:
+        concern_query = concern_query.filter(ParentConcern.created_at >= start_cutoff)
+    if end_cutoff:
+        concern_query = concern_query.filter(ParentConcern.created_at <= end_cutoff)
+    if concern:
+        concern_query = concern_query.filter(ParentConcern.concern_type.ilike(f"%{concern}%"))
+
+    for cid, c_time, c_type, p_loc, st_loc, st_intent in concern_query.all():
+        d, s, r = _parse_location(p_loc or st_loc)
+
+        if target_career_name:
+            if not (st_intent and target_career_name.lower() in st_intent.lower()):
+                continue
+
+        if state and s.lower() != state.lower():
+            continue
+        if district and d.lower() != district.lower():
+            continue
+        if region and r.lower() != region.lower():
+            continue
+
+        matched_events.append({
+            "type": "concern",
+            "date": c_time.strftime("%Y-%m-%d") if c_time else "2026-10-01",
+            "district": d,
+            "state": s,
+            "region": r,
+            "career": st_intent or target_career_name or "General Vocational",
+            "concern": c_type,
+        })
+
+    total_activity = len(matched_events)
+
+    # 3. Aggregations (State, District, Region, Trend, Careers, Concerns)
+    state_counts: Dict[str, int] = {}
+    district_counts: Dict[str, int] = {}
+    region_counts: Dict[str, int] = {}
+    date_counts: Dict[str, int] = {}
+    career_counts: Dict[str, int] = {}
+    concern_counts: Dict[str, int] = {}
+
+    for ev in matched_events:
+        st = ev["state"]
+        dist = ev["district"]
+        reg = ev["region"]
+        dt = ev["date"]
+        car = ev["career"]
+        con = ev["concern"]
+
+        state_counts[st] = state_counts.get(st, 0) + 1
+        district_counts[dist] = district_counts.get(dist, 0) + 1
+        region_counts[reg] = region_counts.get(reg, 0) + 1
+        date_counts[dt] = date_counts.get(dt, 0) + 1
+
+        if car and car != "General Vocational":
+            career_counts[car] = career_counts.get(car, 0) + 1
+        if con:
+            concern_counts[con] = concern_counts.get(con, 0) + 1
+
+    def _to_items(counts_map: Dict[str, int]) -> List[GeographicLocationItem]:
+        items = []
+        for loc_name, count in counts_map.items():
+            pct = round((count / total_activity) * 100, 1) if total_activity > 0 else 0.0
+            items.append(GeographicLocationItem(location=loc_name, count=count, percentage=pct))
+        return sorted(items, key=lambda x: x.count, reverse=True)
+
+    states_list = _to_items(state_counts)
+    districts_list = _to_items(district_counts)
+    regions_list = _to_items(region_counts)
+
+    trend_list = [
+        GeographicTrendPoint(date=d_key, count=c_val)
+        for d_key, c_val in sorted(date_counts.items(), key=lambda x: x[0])
+    ]
+
+    top_state = states_list[0].location if states_list else None
+    top_district = districts_list[0].location if districts_list else None
+    top_region = regions_list[0].location if regions_list else None
+
+    sorted_careers = sorted(career_counts.items(), key=lambda x: x[1], reverse=True)
+    top_career = sorted_careers[0][0] if sorted_careers else (target_career_name or None)
+
+    sorted_concerns = sorted(concern_counts.items(), key=lambda x: x[1], reverse=True)
+    top_concern = sorted_concerns[0][0] if sorted_concerns else (concern or None)
+
+    summary = GeographicSummary(
+        total=total_activity,
+        top_state=top_state,
+        top_district=top_district,
+        top_region=top_region,
+        top_career=top_career,
+        top_concern=top_concern,
+        is_demo_data=True,
+    )
+
+    return GeographicAnalyticsResponse(
+        is_demo_data=True,
+        demo_note="These analytics currently use generated data and do not represent real-world statistics.",
+        summary=summary,
+        states=states_list,
+        districts=districts_list,
+        regions=regions_list,
+        trend=trend_list,
+        available_states=sorted(list(discovered_states)),
+        available_districts=sorted(list(discovered_districts)),
+        available_regions=sorted(list(discovered_regions)),
+        state_districts=formatted_state_districts,
+        available_concerns=available_concerns,
+        available_careers=available_careers,
+    )
+
+
+@router.get("/analytics/geography", response_model=GeographicAnalyticsResponse)
+def get_admin_analytics_geography(
+    state: Optional[str] = Query(None),
+    district: Optional[str] = Query(None),
+    region: Optional[str] = Query(None),
+    career_id: Optional[int] = Query(None),
+    concern: Optional[str] = Query(None),
+    date_range: str = Query("all_time"),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> GeographicAnalyticsResponse:
+    """Returns aggregated geographic concentration analytics based on existing generated database records."""
+    return _calculate_geographic_analytics(
+        db=db,
+        state=state,
+        district=district,
+        region=region,
+        career_id=career_id,
+        concern=concern,
+        date_range=date_range,
+        start_date=start_date,
+        end_date=end_date,
+    )
 

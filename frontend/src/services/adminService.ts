@@ -10,6 +10,8 @@ import type {
   AnalyticsFiltersState,
   ParentConcernsAnalytics,
   SentimentShiftAnalytics,
+  GeographicAnalyticsResponse,
+  GeographicFiltersState,
 } from '@/types/admin';
 
 // --- CLEAN REALISTIC SEED DATA LAYER (FALLBACK) ---
@@ -678,6 +680,25 @@ export const adminService = {
       console.warn('[AdminService] Falling back to rich sentiment analytics:', err);
       return FALLBACK_ANALYTICS.sentiment;
     }
+  },
+
+  /**
+   * Fetches A5 geographic concentration analytics data.
+   */
+  async getGeographicAnalytics(filters?: GeographicFiltersState): Promise<GeographicAnalyticsResponse> {
+    const params = new URLSearchParams();
+    if (filters?.date_range) params.append('date_range', filters.date_range);
+    if (filters?.state) params.append('state', filters.state);
+    if (filters?.district) params.append('district', filters.district);
+    if (filters?.region) params.append('region', filters.region);
+    if (filters?.career_id) params.append('career_id', filters.career_id.toString());
+    if (filters?.concern) params.append('concern', filters.concern);
+    if (filters?.start_date) params.append('start_date', filters.start_date);
+    if (filters?.end_date) params.append('end_date', filters.end_date);
+
+    const queryStr = params.toString();
+    const endpoint = `/api/admin/analytics/geography${queryStr ? `?${queryStr}` : ''}`;
+    return await apiClient<GeographicAnalyticsResponse>(endpoint);
   },
 };
 

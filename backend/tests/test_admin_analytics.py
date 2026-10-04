@@ -854,4 +854,228 @@ def test_a4_sentiment_partial_data_status(db_session, seed_analytics_data):
     assert data["status_message"] == "After-counselling sentiment data is not available yet."
 
 
+# =========================================================================
+# A5 Geographic Analytics Tests
+# =========================================================================
+
+def test_a5_geographic_analytics_rbac(seed_analytics_data):
+    """
+    Section 22: Authorization check:
+    Admin -> 200 OK
+    Student -> 403 Forbidden
+    Parent -> 403 Forbidden
+    Unauthenticated -> 401 Unauthorized
+    """
+    admin = seed_analytics_data["admin"]
+    student = seed_analytics_data["student"]
+    parent = seed_analytics_data["parent"]
+
+    # 1. Admin allowed
+    res_admin = client.get("/api/admin/analytics/geography", headers=_auth_header(admin))
+    assert res_admin.status_code == 200
+
+    # 2. Student denied
+    res_student = client.get("/api/admin/analytics/geography", headers=_auth_header(student))
+    assert res_student.status_code == 403
+
+    # 3. Parent denied
+    res_parent = client.get("/api/admin/analytics/geography", headers=_auth_header(parent))
+    assert res_parent.status_code == 403
+
+    # 4. Unauthenticated denied
+    res_anon = client.get("/api/admin/analytics/geography")
+    assert res_anon.status_code == 401
+
+
+def test_a5_geographic_analytics_demo_label_and_summary(seed_analytics_data):
+    """
+    Section 2, 4, 11:
+    - Labeled clearly as is_demo_data=True
+    - Contains demo_note
+    - Summary metrics: total, top_state, top_district, top_region
+    """
+    admin = seed_analytics_data["admin"]
+    res = client.get("/api/admin/analytics/geography", headers=_auth_header(admin))
+    assert res.status_code == 200
+    data = res.json()
+
+    assert data["is_demo_data"] is True
+    assert "generated data and do not represent real-world statistics" in data["demo_note"]
+    summary = data["summary"]
+    assert summary["total"] > 0
+    assert summary["top_state"] is not None
+    assert summary["top_district"] is not None
+    assert summary["top_region"] is not None
+    assert summary["is_demo_data"] is True
+
+
+def test_a5_geographic_state_district_region_aggregation(seed_analytics_data):
+    """
+    Section 5, 6, 7, 13, 15:
+    - Server-side aggregation by State, District, and Region
+    - Counts and Percentages calculated accurately
+    - Available filter collections discovered
+    """
+    admin = seed_analytics_data["admin"]
+    res = client.get("/api/admin/analytics/geography", headers=_auth_header(admin))
+    assert res.status_code == 200
+    data = res.json()
+
+    total = data["summary"]["total"]
+    assert total > 0
+
+    # States
+    states = data["states"]
+    assert len(states) > 0
+    sum_state_counts = sum(s["count"] for s in states)
+    assert sum_state_counts == total
+    # Check percentage formula
+    for s in states:
+        expected_pct = round((s["count"] / total) * 100, 1)
+        assert abs(s["percentage"] - expected_pct) <= 0.2
+
+    # Districts
+    districts = data["districts"]
+    assert len(districts) > 0
+    sum_district_counts = sum(d["count"] for d in districts)
+    assert sum_district_counts == total
+
+    # Regions
+    regions = data["regions"]
+    assert len(regions) > 0
+    sum_region_counts = sum(r["count"] for r in regions)
+    assert sum_region_counts == total
+
+    # Available filter options
+    assert len(data["available_states"]) > 0
+    assert len(data["available_districts"]) > 0
+    assert len(data["available_regions"]) > 0
+    assert len(data["available_concerns"]) >= 7
+
+
+def test_a5_geographic_state_and_district_filtering(seed_analytics_data):
+    """
+    Section 1, 6:
+    - When state filter is provided, only districts and activity for that state are returned.
+    """
+    admin = seed_analytics_data["admin"]
+    res_all = client.get("/api/admin/analytics/geography", headers=_auth_header(admin))
+    all_data = res_all.json()
+
+    top_state = all_data["summary"]["top_state"]
+    assert top_state is not None
+
+    res_filtered = client.get(
+        f"/api/admin/analytics/geography?state={top_state}",
+        headers=_auth_header(admin),
+    )
+    assert res_filtered.status_code == 200
+    filtered_data = res_filtered.json()
+
+    assert filtered_data["summary"]["top_state"] == top_state
+    # Every returned state item in states array should match top_state
+    for st in filtered_data["states"]:
+        assert st["location"] == top_state
+
+    # District filter test
+    if filtered_data["districts"]:
+        test_district = filtered_data["districts"][0]["location"]
+        res_dist = client.get(
+            f"/api/admin/analytics/geography?district={test_district}",
+            headers=_auth_header(admin),
+        )
+        assert res_dist.status_code == 200
+        dist_data = res_dist.json()
+        assert dist_data["summary"]["total"] >= 1
+        for d in dist_data["districts"]:
+            assert d["location"] == test_district
+
+
+def test_a5_geographic_career_and_concern_filtering(seed_analytics_data):
+    """
+    Section 8, 9:
+    - Career filter restricts observed activity.
+    - Concern filter restricts observed activity.
+    """
+    admin = seed_analytics_data["admin"]
+    occ1 = seed_analytics_data["occ1"]
+
+    # Filter by Career
+    res_career = client.get(
+        f"/api/admin/analytics/geography?career_id={occ1.id}",
+        headers=_auth_header(admin),
+    )
+    assert res_career.status_code == 200
+    career_data = res_career.json()
+    assert "summary" in career_data
+
+    # Filter by Concern
+    res_concern = client.get(
+        "/api/admin/analytics/geography?concern=Income",
+        headers=_auth_header(admin),
+    )
+    assert res_concern.status_code == 200
+    concern_data = res_concern.json()
+    assert concern_data["summary"]["total"] >= 1
+    assert concern_data["summary"]["top_concern"] == "Income"
+
+
+def test_a5_geographic_time_filtering_and_trend(seed_analytics_data):
+    """
+    Section 10: Time filtering updates geographic analytics; trend returned as time-series.
+    """
+    admin = seed_analytics_data["admin"]
+    res_7d = client.get(
+        "/api/admin/analytics/geography?date_range=7d",
+        headers=_auth_header(admin),
+    )
+    assert res_7d.status_code == 200
+    data_7d = res_7d.json()
+
+    res_all = client.get(
+        "/api/admin/analytics/geography?date_range=all_time",
+        headers=_auth_header(admin),
+    )
+    assert res_all.status_code == 200
+    data_all = res_all.json()
+
+    # 7-day total should be <= all-time total
+    assert data_7d["summary"]["total"] <= data_all["summary"]["total"]
+
+    # Trend points should be chronological
+    trend = data_all["trend"]
+    if len(trend) > 1:
+        dates = [p["date"] for p in trend]
+        assert dates == sorted(dates)
+
+
+def test_a5_geographic_empty_state_and_privacy(seed_analytics_data):
+    """
+    Section 15, 20:
+    - Empty state when no data matches (e.g. non-existent state)
+    - Privacy: no GPS, phone, email, Aadhaar, or private messages exposed
+    """
+    admin = seed_analytics_data["admin"]
+    res = client.get(
+        "/api/admin/analytics/geography?state=NonExistentStateXYZ",
+        headers=_auth_header(admin),
+    )
+    assert res.status_code == 200
+    data = res.json()
+
+    assert data["summary"]["total"] == 0
+    assert data["summary"]["top_state"] is None
+    assert len(data["states"]) == 0
+    assert len(data["districts"]) == 0
+    assert len(data["regions"]) == 0
+    assert len(data["trend"]) == 0
+
+    # Privacy check on normal response
+    res_normal = client.get("/api/admin/analytics/geography", headers=_auth_header(admin))
+    raw_text = res_normal.text
+    forbidden_terms = ["aadhaar", "password_hash", "phone", "gps", "exact_address"]
+    for term in forbidden_terms:
+        assert term not in raw_text.lower()
+
+
 

@@ -30,6 +30,7 @@ import { AdminHome } from '@/pages/admin/AdminHome';
 import { AdminAnalytics } from '@/pages/admin/AdminAnalytics';
 import { AdminConcernAnalytics } from '@/pages/admin/AdminConcernAnalytics';
 import { AdminSentimentAnalytics } from '@/pages/admin/AdminSentimentAnalytics';
+import { AdminGeographicAnalytics } from '@/pages/admin/AdminGeographicAnalytics';
 import { AdminData } from '@/pages/admin/AdminData';
 import { AdminEscalations } from '@/pages/admin/AdminEscalations';
 
@@ -147,6 +148,10 @@ export const router = createBrowserRouter([
       {
         path: 'analytics/sentiment',
         element: <AdminSentimentAnalytics />,
+      },
+      {
+        path: 'analytics/geography',
+        element: <AdminGeographicAnalytics />,
       },
       {
         path: 'data',

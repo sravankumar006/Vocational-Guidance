@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   TrendingUp,
   HeartHandshake,
+  MapPin,
 } from 'lucide-react';
 
 const DEFAULT_FILTERS: AnalyticsFiltersState = {
@@ -162,6 +163,13 @@ export const AdminAnalytics: React.FC = () => {
           >
             <HeartHandshake className="h-3.5 w-3.5 text-emerald-400" />
             <span>A4 Sentiment &rarr;</span>
+          </Link>
+          <Link
+            to="/admin/analytics/geography"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-surface-elevated px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:text-text-primary hover:border-brand-500/50"
+          >
+            <MapPin className="h-3.5 w-3.5 text-sky-400" />
+            <span>A5 Geography &rarr;</span>
           </Link>
         </div>
       </div>

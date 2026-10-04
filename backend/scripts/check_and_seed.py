@@ -14,6 +14,7 @@ from models import (
     Occupation,
 )
 from models.enums import (
+    UserRole,
     MessageSenderType,
     SessionStatus,
     ConcernSeverity,
@@ -253,7 +254,97 @@ def seed_rich_data():
                     created_at=sess.started_at,
                 )
                 db.add(he)
-            db.flush()
+        # 6. Seed Geographic Demo Profiles & Activity (A5 Geographic Analytics)
+        print("[+] Ensuring rich multi-state/district geographic demo data exists...")
+        geo_clusters = [
+            ("Visakhapatnam", "Andhra Pradesh", "Automotive Service Technician", 14),
+            ("Vijayawada", "Andhra Pradesh", "Retail Sales Associate", 10),
+            ("Guntur", "Andhra Pradesh", "Welder", 8),
+            ("Tirupati", "Andhra Pradesh", "Electronics Technician", 6),
+            ("Hyderabad", "Telangana", "Data Entry Operator", 16),
+            ("Medak", "Telangana", "Construction Technician", 9),
+            ("Warangal", "Telangana", "Refrigeration and Air Conditioning Technician", 7),
+            ("Pune", "Maharashtra", "Automotive Service Technician", 8),
+            ("Jaipur", "Rajasthan", "Retail Sales Associate", 5),
+        ]
+        
+        for district, state, career_name, activity_weight in geo_clusters:
+            email_slug = district.lower().replace(" ", "")
+            stu_email = f"student.{email_slug}@sih.gov.in"
+            existing_u = db.query(User).filter_by(email=stu_email).first()
+            if not existing_u:
+                stu_user = User(
+                    name=f"Student {district}",
+                    email=stu_email,
+                    phone=f"+91987{random.randint(1000000, 9999999)}",
+                    role=UserRole.STUDENT,
+                    is_active=True,
+                    password_hash="dev_hash",
+                )
+                db.add(stu_user)
+                db.flush()
+                
+                stu_prof = StudentProfile(
+                    user_id=stu_user.id,
+                    education_level="Class 10 Passed",
+                    career_intent=career_name,
+                    location=f"{district}, {state}",
+                )
+                db.add(stu_prof)
+                db.flush()
+                
+                # Associated Parent
+                p_user = User(
+                    name=f"Parent {district}",
+                    email=f"parent.{email_slug}@sih.gov.in",
+                    phone=f"+91986{random.randint(1000000, 9999999)}",
+                    role=UserRole.PARENT,
+                    is_active=True,
+                    password_hash="dev_hash",
+                )
+                db.add(p_user)
+                db.flush()
+                
+                p_prof = ParentProfile(
+                    user_id=p_user.id,
+                    relationship_to_student="Guardian",
+                    occupation="Self-Employed",
+                    location=f"{district}, {state}",
+                )
+                db.add(p_prof)
+                db.flush()
+                
+                # Seed sessions
+                num_sessions = max(2, activity_weight // 2)
+                for s_idx in range(num_sessions):
+                    days_ago = random.randint(1, 45)
+                    s_time = now - timedelta(days=days_ago, hours=random.randint(1, 18))
+                    sess = CounsellingSession(
+                        student_profile_id=stu_prof.id,
+                        status=SessionStatus.COMPLETED if s_idx % 3 != 0 else SessionStatus.ACTIVE,
+                        started_at=s_time,
+                        ended_at=s_time + timedelta(minutes=25),
+                    )
+                    db.add(sess)
+                    
+                # Seed parent concerns
+                num_concerns = max(2, activity_weight - num_sessions)
+                for c_idx in range(num_concerns):
+                    cat_item = CANONICAL_CATEGORIES[c_idx % len(CANONICAL_CATEGORIES)]
+                    days_ago = random.randint(0, 50)
+                    c_time = now - timedelta(days=days_ago, hours=random.randint(1, 22))
+                    c = ParentConcern(
+                        parent_profile_id=p_prof.id,
+                        student_profile_id=stu_prof.id,
+                        concern_type=cat_item[0],
+                        description=cat_item[1][c_idx % len(cat_item[1])],
+                        severity=ConcernSeverity.HIGH if c_idx % 2 == 0 else ConcernSeverity.MEDIUM,
+                        status=ConcernStatus.ADDRESSED if days_ago > 15 else ConcernStatus.OPEN,
+                        created_at=c_time,
+                        updated_at=c_time + timedelta(hours=1),
+                    )
+                    db.add(c)
+                db.flush()
 
         db.commit()
         print("=== DATABASE SEEDING COMPLETED SUCCESSFULLY ===")

@@ -319,3 +319,55 @@ export interface AnalyticsFiltersState {
   end_date?: string | null;
 }
 
+// =========================================================================
+// A5: Geographic Concentration Analytics Types
+// =========================================================================
+
+export interface GeographicLocationItem {
+  location: string;
+  count: number;
+  percentage: number;
+}
+
+export interface GeographicTrendPoint {
+  date: string;
+  count: number;
+}
+
+export interface GeographicSummary {
+  total: number;
+  top_state?: string | null;
+  top_district?: string | null;
+  top_region?: string | null;
+  top_career?: string | null;
+  top_concern?: string | null;
+  is_demo_data: boolean;
+}
+
+export interface GeographicAnalyticsResponse {
+  is_demo_data: boolean;
+  demo_note: string;
+  summary: GeographicSummary;
+  states: GeographicLocationItem[];
+  districts: GeographicLocationItem[];
+  regions: GeographicLocationItem[];
+  trend: GeographicTrendPoint[];
+  available_states: string[];
+  available_districts: string[];
+  available_regions: string[];
+  state_districts: Record<string, string[]>;
+  available_concerns: string[];
+  available_careers: FilterOptionItem[];
+}
+
+export interface GeographicFiltersState {
+  state?: string | null;
+  district?: string | null;
+  region?: string | null;
+  career_id?: number | null;
+  concern?: string | null;
+  date_range: string;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+

@@ -371,6 +371,9 @@ class GeographicAnalyticsResponse(BaseModel):
     regions: List[GeographicLocationItem] = Field(default_factory=list)
     trend: List[GeographicTrendPoint] = Field(default_factory=list)
     available_states: List[str] = Field(default_factory=list)
+    available_districts: List[str] = Field(default_factory=list)
+    available_regions: List[str] = Field(default_factory=list)
+    state_districts: Dict[str, List[str]] = Field(default_factory=dict)
     available_concerns: List[str] = Field(
         default_factory=lambda: [
             "Income", "Job Security", "Further Education", "Social Perception",
