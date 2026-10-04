@@ -32,6 +32,7 @@ from models.counselling import (
     SentimentType,
     ConcernSeverity,
     ConcernStatus,
+    MessageSenderType,
 )
 from api.deps import require_admin
 from schemas.counselling import EscalationResponse
@@ -74,7 +75,13 @@ from schemas.admin import (
     GeographicLocationItem,
     GeographicTrendPoint,
     GeographicSummary,
+    AIPerformanceSummary,
+    AIResolutionBreakdown,
+    AIPerformanceTrendPoint,
+    AIUnansweredCategoryItem,
+    AIPerformanceAnalyticsResponse,
 )
+from core.config import settings
 from services.counselling_service import counselling_service, to_escalation_response
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -1951,6 +1958,233 @@ def get_admin_analytics_geography(
         region=region,
         career_id=career_id,
         concern=concern,
+        date_range=date_range,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+# =========================================================================
+# 9. AI Performance Analytics (A6 — AI Performance Analytics)
+# =========================================================================
+
+def _calculate_ai_performance_analytics(
+    db: Session,
+    date_range: str = "30d",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> AIPerformanceAnalyticsResponse:
+    """
+    Calculates deterministic AI performance telemetry:
+    1. Total AI Sessions
+    2. Resolution Rate
+    3. Escalation Rate
+    4. Low-Confidence Responses
+    5. Unanswered Questions
+    """
+    start_cutoff, end_cutoff = _parse_date_filters(date_range, start_date, end_date)
+    threshold = float(getattr(settings, "AI_CONFIDENCE_THRESHOLD", 0.60))
+
+    # 1. Total Sessions in window
+    sess_q = db.query(CounsellingSession)
+    if start_cutoff:
+        sess_q = sess_q.filter(CounsellingSession.started_at >= start_cutoff)
+    if end_cutoff:
+        sess_q = sess_q.filter(CounsellingSession.started_at <= end_cutoff)
+
+    sessions = sess_q.all()
+    total_sessions = len(sessions)
+    session_ids = [s.id for s in sessions]
+
+    if total_sessions == 0:
+        return AIPerformanceAnalyticsResponse(
+            is_demo_data=True,
+            demo_note="These metrics currently use generated data and do not represent real production AI performance.",
+            confidence_threshold=threshold,
+            summary=AIPerformanceSummary(),
+            resolution_breakdown=AIResolutionBreakdown(),
+            trend=[],
+            unanswered_categories=[],
+            deterministic_summary=["No AI counselling sessions recorded in this period."],
+        )
+
+    # 2. Escalations associated with these sessions
+    escalations_q = db.query(HumanEscalation).filter(HumanEscalation.counselling_session_id.in_(session_ids))
+    session_escalations = escalations_q.all()
+
+    escalated_session_ids = set(e.counselling_session_id for e in session_escalations if e.counselling_session_id)
+    for s in sessions:
+        if s.status == SessionStatus.ESCALATED:
+            escalated_session_ids.add(s.id)
+
+    escalated_count = len(escalated_session_ids)
+    escalation_rate = round((escalated_count / total_sessions) * 100, 1)
+
+    # 3. Resolution Rate (Completed sessions without escalation)
+    resolved_count = sum(
+        1 for s in sessions
+        if s.status == SessionStatus.COMPLETED and s.id not in escalated_session_ids
+    )
+    resolution_rate = round((resolved_count / total_sessions) * 100, 1)
+
+    active_unresolved = max(0, total_sessions - (resolved_count + escalated_count))
+
+    # 4. Messages Telemetry (AI responses and user questions)
+    msg_q = db.query(CounsellingMessage).filter(CounsellingMessage.session_id.in_(session_ids))
+    messages = msg_q.all()
+
+    ai_responses = [m for m in messages if m.sender_type == MessageSenderType.AI]
+    user_questions = [m for m in messages if m.sender_type in (MessageSenderType.STUDENT, MessageSenderType.PARENT)]
+
+    total_ai_responses = len(ai_responses)
+    total_user_questions = len(user_questions)
+
+    # Low confidence calculation based on confidence threshold
+    low_conf_msgs = []
+    unanswered_msgs = []
+
+    for m in ai_responses:
+        conf_val = m.confidence
+        if conf_val is None:
+            ev = db.query(SentimentEvent).filter(SentimentEvent.counselling_message_id == m.id).first()
+            conf_val = ev.score if ev and ev.score is not None else 0.75
+
+        if conf_val < threshold:
+            low_conf_msgs.append(m)
+
+        if m.requires_human:
+            unanswered_msgs.append(m)
+
+    low_confidence_count = len(low_conf_msgs)
+    low_confidence_rate = (
+        round((low_confidence_count / total_ai_responses) * 100, 1)
+        if total_ai_responses > 0
+        else 0.0
+    )
+
+    # Unanswered questions (requires_human or triggered escalations)
+    unanswered_count = len(unanswered_msgs)
+    if unanswered_count == 0 and escalated_count > 0:
+        unanswered_count = len(session_escalations)
+
+    unanswered_rate = (
+        round((unanswered_count / total_user_questions) * 100, 1)
+        if total_user_questions > 0
+        else 0.0
+    )
+
+    # 5. Trend Over Time
+    date_buckets: Dict[str, Dict[str, int]] = {}
+    for s in sessions:
+        d_key = s.started_at.strftime("%Y-%m-%d") if s.started_at else "2026-10-01"
+        if d_key not in date_buckets:
+            date_buckets[d_key] = {"total": 0, "resolved": 0, "escalated": 0, "low_conf": 0}
+        date_buckets[d_key]["total"] += 1
+        if s.id in escalated_session_ids:
+            date_buckets[d_key]["escalated"] += 1
+        elif s.status == SessionStatus.COMPLETED:
+            date_buckets[d_key]["resolved"] += 1
+
+    for m in low_conf_msgs:
+        d_key = m.created_at.strftime("%Y-%m-%d") if m.created_at else "2026-10-01"
+        if d_key in date_buckets:
+            date_buckets[d_key]["low_conf"] += 1
+
+    trend_points = [
+        AIPerformanceTrendPoint(
+            date=d_key,
+            total_sessions=vals["total"],
+            resolved=vals["resolved"],
+            escalated=vals["escalated"],
+            low_confidence=vals["low_conf"],
+        )
+        for d_key, vals in sorted(date_buckets.items(), key=lambda x: x[0])
+    ]
+
+    # 6. Unanswered Question Topic Categories
+    cat_counts: Dict[str, int] = {}
+    for esc in session_escalations:
+        cat_name = esc.concern or "General Inquiry"
+        cat_counts[cat_name] = cat_counts.get(cat_name, 0) + 1
+
+    total_cat = sum(cat_counts.values()) or 1
+    unanswered_categories = [
+        AIUnansweredCategoryItem(
+            category=k,
+            count=v,
+            percentage=round((v / total_cat) * 100, 1),
+        )
+        for k, v in sorted(cat_counts.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    # 7. Deterministic Factual Summary (Section 10)
+    deterministic_summary = [
+        f"{total_sessions} AI counselling sessions recorded in this period.",
+        (
+            f"A majority ({resolution_rate}%) of recorded sessions completed without requiring human intervention."
+            if resolution_rate >= 50.0
+            else f"{resolution_rate}% of recorded sessions completed without human intervention."
+        ),
+        (
+            f"{escalation_rate}% of sessions resulted in human counsellor escalations."
+            if escalation_rate > 0
+            else "No sessions triggered human counsellor escalation."
+        ),
+        (
+            f"{low_confidence_count} AI responses ({low_confidence_rate}%) scored below the configured confidence threshold ({threshold})."
+            if low_confidence_count > 0
+            else f"No responses scored below the configured confidence threshold ({threshold})."
+        ),
+        (
+            f"{unanswered_count} user questions required human escalation or exceeded grounded knowledge."
+            if unanswered_count > 0
+            else "All user questions were addressed within grounded knowledge."
+        ),
+    ]
+
+    summary = AIPerformanceSummary(
+        total_sessions=total_sessions,
+        total_ai_responses=total_ai_responses,
+        total_user_questions=total_user_questions,
+        resolved_sessions=resolved_count,
+        resolution_rate=resolution_rate,
+        escalated_sessions=escalated_count,
+        escalation_rate=escalation_rate,
+        low_confidence_responses=low_confidence_count,
+        low_confidence_rate=low_confidence_rate,
+        unanswered_questions=unanswered_count,
+        unanswered_rate=unanswered_rate,
+    )
+
+    breakdown = AIResolutionBreakdown(
+        resolved=resolved_count,
+        escalated=escalated_count,
+        active_unresolved=active_unresolved,
+    )
+
+    return AIPerformanceAnalyticsResponse(
+        is_demo_data=True,
+        demo_note="These metrics currently use generated data and do not represent real production AI performance.",
+        confidence_threshold=threshold,
+        summary=summary,
+        resolution_breakdown=breakdown,
+        trend=trend_points,
+        unanswered_categories=unanswered_categories,
+        deterministic_summary=deterministic_summary,
+    )
+
+
+@router.get("/analytics/ai", response_model=AIPerformanceAnalyticsResponse)
+def get_admin_analytics_ai(
+    date_range: str = Query("30d"),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AIPerformanceAnalyticsResponse:
+    """Returns aggregated AI performance analytics based on existing counselling records and AI telemetry."""
+    return _calculate_ai_performance_analytics(
+        db=db,
         date_range=date_range,
         start_date=start_date,
         end_date=end_date,

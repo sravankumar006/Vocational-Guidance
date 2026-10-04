@@ -1078,4 +1078,249 @@ def test_a5_geographic_empty_state_and_privacy(seed_analytics_data):
         assert term not in raw_text.lower()
 
 
+# =========================================================================
+# A6 — AI Performance Analytics Tests
+# =========================================================================
+
+def test_a6_ai_analytics_rbac_protection(seed_analytics_data):
+    """
+    Section 21, 24:
+    - Admin: allowed (200)
+    - Student: denied (403)
+    - Parent: denied (403)
+    - Unauthenticated: denied (401)
+    """
+    admin = seed_analytics_data["admin"]
+    student = seed_analytics_data["student"]
+    parent = seed_analytics_data["parent"]
+
+    # 1. Admin allowed
+    res_admin = client.get("/api/admin/analytics/ai", headers=_auth_header(admin))
+    assert res_admin.status_code == 200
+
+    # 2. Student denied (403)
+    res_student = client.get("/api/admin/analytics/ai", headers=_auth_header(student))
+    assert res_student.status_code == 403
+
+    # 3. Parent denied (403)
+    res_parent = client.get("/api/admin/analytics/ai", headers=_auth_header(parent))
+    assert res_parent.status_code == 403
+
+    # 4. Unauthenticated denied (401)
+    res_anon = client.get("/api/admin/analytics/ai")
+    assert res_anon.status_code == 401
+
+
+def test_a6_ai_analytics_summary_and_metrics_calculations(db_session: Session, seed_analytics_data):
+    """
+    Section 1, 2, 8, 9, 10, 11:
+    - 5 Primary metrics: Total AI Sessions, Resolution Rate, Escalation Rate,
+      Low-Confidence Responses, Unanswered Questions.
+    - Demonstrates accurate server-side aggregation.
+    - Deterministic summary generated without LLM.
+    - Demo-data label (is_demo_data == True).
+    """
+    admin = seed_analytics_data["admin"]
+    db = db_session
+    now = datetime.utcnow()
+
+    # Create dedicated student profile for controlled A6 scenario
+    user_test = User(
+        email="a6student@sih.gov.in",
+        password_hash=hash_password("pass123"),
+        role=UserRole.STUDENT,
+        name="A6 Student",
+        is_active=True,
+    )
+    db.add(user_test)
+    db.commit()
+
+    student_prof = StudentProfile(
+        user_id=user_test.id,
+        education_level="Class 10 Passed",
+        location="Hyderabad, Telangana",
+    )
+    db.add(student_prof)
+    db.commit()
+
+    # Session A: COMPLETED, no escalation -> RESOLVED. Has 2 AI messages (conf 0.90, conf 0.85)
+    sess_a = CounsellingSession(
+        student_profile_id=student_prof.id,
+        status=SessionStatus.COMPLETED,
+        started_at=now - timedelta(days=5),
+        ended_at=now - timedelta(days=5, hours=-1),
+    )
+    # Session B: ACTIVE, has escalation -> ESCALATED. Has 1 AI msg (conf 0.40 -> LOW CONFIDENCE, requires_human=True -> UNANSWERED)
+    sess_b = CounsellingSession(
+        student_profile_id=student_prof.id,
+        status=SessionStatus.ACTIVE,
+        started_at=now - timedelta(days=3),
+    )
+    # Session C: ACTIVE, no escalation -> ACTIVE/UNRESOLVED. Has 1 AI msg (conf 0.75)
+    sess_c = CounsellingSession(
+        student_profile_id=student_prof.id,
+        status=SessionStatus.ACTIVE,
+        started_at=now - timedelta(days=1),
+    )
+    db.add_all([sess_a, sess_b, sess_c])
+    db.commit()
+
+    # AI Messages
+    msg_a1 = CounsellingMessage(
+        session_id=sess_a.id,
+        sender_type=MessageSenderType.AI,
+        content="AI response A1",
+        confidence=0.90,
+        requires_human=False,
+        created_at=now - timedelta(days=5),
+    )
+    msg_a2 = CounsellingMessage(
+        session_id=sess_a.id,
+        sender_type=MessageSenderType.AI,
+        content="AI response A2",
+        confidence=0.85,
+        requires_human=False,
+        created_at=now - timedelta(days=5),
+    )
+    msg_b1 = CounsellingMessage(
+        session_id=sess_b.id,
+        sender_type=MessageSenderType.AI,
+        content="I am not sure about this specific salary detail.",
+        confidence=0.40,
+        requires_human=True,
+        created_at=now - timedelta(days=3),
+    )
+    msg_c1 = CounsellingMessage(
+        session_id=sess_c.id,
+        sender_type=MessageSenderType.AI,
+        content="Solar technicians work outdoors on installations.",
+        confidence=0.75,
+        requires_human=False,
+        created_at=now - timedelta(days=1),
+    )
+    db.add_all([msg_a1, msg_a2, msg_b1, msg_c1])
+
+    # Escalation for Session B
+    esc_b = HumanEscalation(
+        counselling_session_id=sess_b.id,
+        student_id=student_prof.id,
+        concern="Salary Uncertainty",
+        language="en",
+        priority=EscalationPriority.HIGH,
+        status=EscalationStatus.PENDING,
+        created_at=now - timedelta(days=3),
+    )
+    db.add(esc_b)
+    db.commit()
+
+    # Request analytics
+    res = client.get("/api/admin/analytics/ai?date_range=7d", headers=_auth_header(admin))
+    assert res.status_code == 200
+    data = res.json()
+
+    # Demo data label
+    assert data["is_demo_data"] is True
+    assert "generated" in data["demo_note"].lower()
+
+    summary = data["summary"]
+    # Total AI sessions within last 7 days includes sess_a, sess_b, sess_c (and sess1 from seed)
+    assert summary["total_sessions"] >= 3
+    assert summary["resolution_rate"] >= 0.0
+    assert summary["escalation_rate"] >= 0.0
+    assert summary["low_confidence_responses"] >= 1
+    assert summary["unanswered_questions"] >= 1
+    assert summary["low_confidence_rate"] > 0
+
+    # Resolution breakdown
+    breakdown = data["resolution_breakdown"]
+    assert breakdown["resolved"] >= 1  # sess_a
+    assert breakdown["escalated"] >= 1  # sess_b
+    assert breakdown["active_unresolved"] >= 1  # sess_c
+    total_breakdown = breakdown["resolved"] + breakdown["escalated"] + breakdown["active_unresolved"]
+    assert total_breakdown == summary["total_sessions"]
+
+    # Low confidence telemetry
+    assert data["confidence_threshold"] == 0.60
+
+    # Unanswered categories
+    categories = data["unanswered_categories"]
+    assert len(categories) >= 1
+    category_names = [c["category"] for c in categories]
+    assert "Salary Uncertainty" in category_names
+
+    # Deterministic summary
+    perf_summary = data["deterministic_summary"]
+    assert isinstance(perf_summary, list)
+    assert len(perf_summary) >= 2
+
+
+def test_a6_ai_analytics_time_filtering_and_trend(seed_analytics_data):
+    """
+    Section 5, 6:
+    - Time filters: 7d, 30d, 90d, this_year, all_time.
+    - Trend contains chronological items with session, resolved, escalated, low_confidence counts.
+    """
+    admin = seed_analytics_data["admin"]
+
+    # 7-day filter
+    res_7d = client.get("/api/admin/analytics/ai?date_range=7d", headers=_auth_header(admin))
+    assert res_7d.status_code == 200
+    data_7d = res_7d.json()
+
+    # All-time filter
+    res_all = client.get("/api/admin/analytics/ai?date_range=all_time", headers=_auth_header(admin))
+    assert res_all.status_code == 200
+    data_all = res_all.json()
+
+    assert data_7d["summary"]["total_sessions"] <= data_all["summary"]["total_sessions"]
+
+    # Trend chronological validation
+    trend = data_all["trend"]
+    if len(trend) > 1:
+        dates = [p["date"] for p in trend]
+        assert dates == sorted(dates)
+        for p in trend:
+            assert "total_sessions" in p
+            assert "resolved" in p
+            assert "escalated" in p
+            assert "low_confidence" in p
+
+
+def test_a6_ai_analytics_empty_state_and_privacy(seed_analytics_data):
+    """
+    Section 19, 20, 22:
+    - Empty state when filtering far into future.
+    - Privacy: No conversation bodies, passwords, Aadhaar, or student PII.
+    """
+    admin = seed_analytics_data["admin"]
+
+    # Future date filter to verify empty state
+    res_empty = client.get(
+        "/api/admin/analytics/ai?start_date=2099-01-01&end_date=2099-01-02",
+        headers=_auth_header(admin),
+    )
+    assert res_empty.status_code == 200
+    empty_data = res_empty.json()
+    assert empty_data["summary"]["total_sessions"] == 0
+    assert empty_data["summary"]["resolution_rate"] == 0.0
+    assert empty_data["summary"]["escalation_rate"] == 0.0
+    assert empty_data["summary"]["low_confidence_responses"] == 0
+    assert empty_data["summary"]["unanswered_questions"] == 0
+    assert len(empty_data["trend"]) == 0
+    assert len(empty_data["unanswered_categories"]) == 0
+
+    # Privacy check on raw text
+    res = client.get("/api/admin/analytics/ai", headers=_auth_header(admin))
+    raw_text = res.text
+    forbidden_tokens = [
+        "aadhaar",
+        "password_hash",
+        "private_message",
+        "counsellingmessage.content",
+    ]
+    for token in forbidden_tokens:
+        assert token not in raw_text.lower()
+
+
+
 

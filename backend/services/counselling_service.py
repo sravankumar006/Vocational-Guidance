@@ -1109,6 +1109,8 @@ class CounsellingService:
             session_id=session.id,
             sender_type=MessageSenderType.AI,
             content=ai_message_text,
+            confidence=round(confidence, 3),
+            requires_human=requires_human,
         )
         db.add(assistant_msg)
         db.commit()

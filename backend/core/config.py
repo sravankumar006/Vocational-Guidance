@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     # AI Configuration (No AI logic in this brick; configuration readiness only)
     AI_PROVIDER: str = "gemini"
     GEMINI_API_KEY: str = ""
+    AI_CONFIDENCE_THRESHOLD: float = 0.60
 
     # Custom / Self-Hosted Model Configuration
     OWN_MODEL_URL: str = ""

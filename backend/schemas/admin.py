@@ -381,3 +381,54 @@ class GeographicAnalyticsResponse(BaseModel):
         ]
     )
     available_careers: List[FilterOptionItem] = Field(default_factory=list)
+
+
+# =========================================================================
+# A6: AI Performance Analytics Schemas
+# =========================================================================
+
+class AIPerformanceSummary(BaseModel):
+    total_sessions: int = Field(default=0, description="Total counselling sessions involving AI")
+    total_ai_responses: int = Field(default=0, description="Total AI generated response messages")
+    total_user_questions: int = Field(default=0, description="Total user questions sent")
+    resolved_sessions: int = Field(default=0, description="Sessions resolved without human escalation")
+    resolution_rate: float = Field(default=0.0, description="Percentage of sessions resolved")
+    escalated_sessions: int = Field(default=0, description="Sessions resulting in human escalation")
+    escalation_rate: float = Field(default=0.0, description="Percentage of sessions escalated")
+    low_confidence_responses: int = Field(default=0, description="Responses scoring below confidence threshold")
+    low_confidence_rate: float = Field(default=0.0, description="Percentage of responses with low confidence")
+    unanswered_questions: int = Field(default=0, description="Questions requiring human escalation or unsupported")
+    unanswered_rate: float = Field(default=0.0, description="Percentage of questions unanswered")
+
+
+class AIResolutionBreakdown(BaseModel):
+    resolved: int = Field(default=0)
+    escalated: int = Field(default=0)
+    active_unresolved: int = Field(default=0)
+
+
+class AIPerformanceTrendPoint(BaseModel):
+    date: str = Field(..., description="Date key YYYY-MM-DD")
+    total_sessions: int = Field(default=0)
+    resolved: int = Field(default=0)
+    escalated: int = Field(default=0)
+    low_confidence: int = Field(default=0)
+
+
+class AIUnansweredCategoryItem(BaseModel):
+    category: str = Field(..., description="Concern or topic category")
+    count: int = Field(default=0)
+    percentage: float = Field(default=0.0)
+
+
+class AIPerformanceAnalyticsResponse(BaseModel):
+    is_demo_data: bool = Field(default=True)
+    demo_note: str = Field(
+        default="These metrics currently use generated data and do not represent real production AI performance."
+    )
+    confidence_threshold: float = Field(default=0.60, description="Configured confidence threshold")
+    summary: AIPerformanceSummary = Field(default_factory=AIPerformanceSummary)
+    resolution_breakdown: AIResolutionBreakdown = Field(default_factory=AIResolutionBreakdown)
+    trend: List[AIPerformanceTrendPoint] = Field(default_factory=list)
+    unanswered_categories: List[AIUnansweredCategoryItem] = Field(default_factory=list)
+    deterministic_summary: List[str] = Field(default_factory=list)

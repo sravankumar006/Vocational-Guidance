@@ -371,3 +371,58 @@ export interface GeographicFiltersState {
   end_date?: string | null;
 }
 
+// =========================================================================
+// A6: AI Performance Analytics Types
+// =========================================================================
+
+export interface AIPerformanceSummary {
+  total_sessions: number;
+  total_ai_responses: number;
+  total_user_questions: number;
+  resolved_sessions: number;
+  resolution_rate: number;
+  escalated_sessions: number;
+  escalation_rate: number;
+  low_confidence_responses: number;
+  low_confidence_rate: number;
+  unanswered_questions: number;
+  unanswered_rate: number;
+}
+
+export interface AIResolutionBreakdown {
+  resolved: number;
+  escalated: number;
+  active_unresolved: number;
+}
+
+export interface AIPerformanceTrendPoint {
+  date: string;
+  total_sessions: number;
+  resolved: number;
+  escalated: number;
+  low_confidence: number;
+}
+
+export interface AIUnansweredCategoryItem {
+  category: string;
+  count: number;
+  percentage: number;
+}
+
+export interface AIPerformanceAnalyticsResponse {
+  is_demo_data: boolean;
+  demo_note: string;
+  confidence_threshold: number;
+  summary: AIPerformanceSummary;
+  resolution_breakdown: AIResolutionBreakdown;
+  trend: AIPerformanceTrendPoint[];
+  unanswered_categories: AIUnansweredCategoryItem[];
+  deterministic_summary: string[];
+}
+
+export interface AIPerformanceFiltersState {
+  date_range: string;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+

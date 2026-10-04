@@ -196,10 +196,15 @@ def seed_rich_data():
                 num_msgs = random.randint(4, len(dialogues))
                 msg_time = sess.started_at
                 for sender_type, content in dialogues[:num_msgs]:
+                    is_ai = sender_type == MessageSenderType.AI
+                    conf = random.choice([0.75, 0.82, 0.88, 0.92, 0.55]) if is_ai else None
+                    req_h = bool(is_ai and conf and conf < 0.60)
                     m = CounsellingMessage(
                         session_id=sess.id,
                         sender_type=sender_type,
                         content=content,
+                        confidence=conf,
+                        requires_human=req_h,
                         created_at=msg_time,
                     )
                     db.add(m)

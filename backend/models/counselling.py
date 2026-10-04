@@ -5,6 +5,7 @@ from sqlalchemy import (
     String,
     Text,
     Float,
+    Boolean,
     DateTime,
     ForeignKey,
     Enum as SQLEnum,
@@ -92,6 +93,8 @@ class CounsellingMessage(Base):
         nullable=False,
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    requires_human: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True

@@ -2,7 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { NavigationItem } from '@/types';
-import { Home, BarChart3, Database, AlertTriangle, ShieldAlert, HeartHandshake, MapPin } from 'lucide-react';
+import { Home, BarChart3, Database, AlertTriangle, ShieldAlert, HeartHandshake, MapPin, Cpu } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export const AdminLayout: React.FC = () => {
@@ -14,6 +14,7 @@ export const AdminLayout: React.FC = () => {
     { label: 'Concern Analytics', labelTe: 'ఆందోళనల విశ్లేషణ', href: '/admin/analytics/concerns', icon: ShieldAlert },
     { label: 'Sentiment Analytics', labelTe: 'మనోభావాల విశ్లేషణ', href: '/admin/analytics/sentiment', icon: HeartHandshake },
     { label: 'Geographic Analytics', labelTe: 'భౌగోళిక విశ్లేషణ', href: '/admin/analytics/geography', icon: MapPin },
+    { label: 'AI Performance', labelTe: 'AI పనితీరు', href: '/admin/analytics/ai', icon: Cpu },
     { label: 'Data', labelTe: 'డేటా నిర్వహణ', href: '/admin/data', icon: Database },
     { label: 'Escalations', labelTe: 'కౌన్సిలర్ సంప్రదింపులు', href: '/admin/escalations', icon: AlertTriangle },
   ];

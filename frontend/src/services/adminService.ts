@@ -12,6 +12,8 @@ import type {
   SentimentShiftAnalytics,
   GeographicAnalyticsResponse,
   GeographicFiltersState,
+  AIPerformanceAnalyticsResponse,
+  AIPerformanceFiltersState,
 } from '@/types/admin';
 
 // --- CLEAN REALISTIC SEED DATA LAYER (FALLBACK) ---
@@ -699,6 +701,20 @@ export const adminService = {
     const queryStr = params.toString();
     const endpoint = `/api/admin/analytics/geography${queryStr ? `?${queryStr}` : ''}`;
     return await apiClient<GeographicAnalyticsResponse>(endpoint);
+  },
+
+  /**
+   * Fetches A6 AI performance telemetry data.
+   */
+  async getAIPerformanceAnalytics(filters?: AIPerformanceFiltersState): Promise<AIPerformanceAnalyticsResponse> {
+    const params = new URLSearchParams();
+    if (filters?.date_range) params.append('date_range', filters.date_range);
+    if (filters?.start_date) params.append('start_date', filters.start_date);
+    if (filters?.end_date) params.append('end_date', filters.end_date);
+
+    const queryStr = params.toString();
+    const endpoint = `/api/admin/analytics/ai${queryStr ? `?${queryStr}` : ''}`;
+    return await apiClient<AIPerformanceAnalyticsResponse>(endpoint);
   },
 };
 
