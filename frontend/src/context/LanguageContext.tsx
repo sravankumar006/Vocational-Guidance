@@ -5,6 +5,10 @@ interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: (key: string) => string;
+  localizeName: (name?: string | null) => string;
+  localizeCareerTitle: (title?: string | null) => string;
+  localizeEducation: (edu?: string | null) => string;
+  localizeLocation: (loc?: string | null) => string;
 }
 
 const DICTIONARY: Record<Language, Record<string, string>> = {
@@ -492,8 +496,100 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return DICTIONARY[language]?.[key] || DICTIONARY['en'][key] || key;
   };
 
+  const localizeName = (name?: string | null): string => {
+    if (!name) return language === 'te' ? 'మీ బిడ్డ' : 'Your Child';
+    // Strip developer tags such as (Dev Student) or (Dev ...)
+    const clean = name.replace(/\s*\([^)]*dev[^)]*\)/gi, '').trim();
+    if (language === 'te') {
+      const lower = clean.toLowerCase();
+      if (lower.includes('aarav sharma') || lower === 'aarav') return 'ఆరవ్ శర్మ';
+      if (lower.includes('priya patel') || lower === 'priya') return 'ప్రియా పటేల్';
+      if (lower.includes('sunita sharma') || lower === 'sunita') return 'సునీతా శర్మ';
+      if (lower.includes('rajesh verma') || lower === 'rajesh') return 'డాక్టర్ రాజేష్ వర్మ';
+      if (lower.includes('rohan')) return 'రోహన్';
+      if (lower.includes('ananya')) return 'అనన్య';
+      if (lower.includes('kavya')) return 'కావ్య';
+      if (lower.includes('sai')) return 'సాయి';
+    }
+    return clean || (language === 'te' ? 'మీ బిడ్డ' : 'Your Child');
+  };
+
+  const localizeCareerTitle = (title?: string | null): string => {
+    if (!title || title === 'Career not selected yet') {
+      return t('careerNotSelected');
+    }
+    if (language === 'te') {
+      const lower = title.toLowerCase();
+      if (lower.includes('automotive service technician')) return 'ఆటోమోటివ్ సర్వీస్ టెక్నీషియన్';
+      if (lower.includes('solar panel')) return 'సోలార్ ప్యానెల్ ఇన్‌స్టాలేషన్ టెక్నీషియన్';
+      if (lower.includes('general duty assistant')) return 'జనరల్ డ్యూటీ అసిస్టెంట్ (ఆరోగ్య సంరక్షణ)';
+      if (lower.includes('electrician')) return 'ఎలక్ట్రీషియన్';
+      if (lower.includes('welder')) return 'వెల్డర్';
+      if (lower.includes('fitter')) return 'ఫిట్టర్';
+      if (lower.includes('plumber')) return 'ప్లంబర్';
+      if (lower.includes('carpenter')) return 'కార్పెంటర్';
+      if (lower.includes('machinist')) return 'సిఎన్‌సి మెషినిస్ట్';
+      if (lower.includes('data entry')) return 'డేటా ఎంట్రీ ఆపరేటర్';
+      if (lower.includes('draughtsman civil')) return 'డ్రాఫ్ట్స్‌మన్ (సివిల్)';
+      if (lower.includes('draughtsman mechanical')) return 'డ్రాఫ్ట్స్‌మన్ (మెకానికల్)';
+      if (lower.includes('mechanic diesel')) return 'మెకానిక్ డీజిల్';
+      if (lower.includes('motor vehicle')) return 'మెకానిక్ మోటార్ వెహికల్';
+      if (lower.includes('wireman')) return 'వైర్‌మ్యాన్';
+      if (lower.includes('electronics')) return 'ఎలక్ట్రానిక్స్ మెకానిక్';
+      if (lower.includes('refrigeration') || lower.includes('air conditioning')) {
+        return 'శీతలీకరణ & ఎయిర్ కండిషనింగ్ టెక్నీషియన్';
+      }
+    }
+    return title;
+  };
+
+  const localizeEducation = (edu?: string | null): string => {
+    if (!edu) return '';
+    if (language === 'te') {
+      const lower = edu.toLowerCase();
+      if (lower.includes('10')) return '10వ తరగతి ఉత్తీర్ణత';
+      if (lower.includes('12')) return '12వ తరగతి ఉత్తీర్ణత';
+      if (lower.includes('8')) return '8వ తరగతి ఉత్తీర్ణత';
+      if (lower.includes('iti')) return 'ఐటీఐ సర్టిఫికేట్';
+      if (lower.includes('diploma')) return 'డిప్లొమా';
+      if (lower.includes('graduate')) return 'గ్రాడ్యుయేట్ / డిగ్రీ';
+    }
+    return edu;
+  };
+
+  const localizeLocation = (loc?: string | null): string => {
+    if (!loc) return '';
+    if (language === 'te') {
+      const lower = loc.toLowerCase().replace(/[\s_-]/g, '');
+      if (lower.includes('andhrapradesh') || lower.includes('andhra')) return 'ఆంధ్రప్రదేశ్';
+      if (lower.includes('telangana')) return 'తెలంగాణ';
+      if (lower.includes('medak')) return 'మెదక్';
+      if (lower.includes('hyderabad')) return 'హైదరాబాద్';
+      if (lower.includes('guntur')) return 'గుంటూరు';
+      if (lower.includes('vijayawada')) return 'విజయవాడ';
+      if (lower.includes('warangal')) return 'వరంగల్';
+      if (lower.includes('khammam')) return 'ఖమ్మం';
+      if (lower.includes('kurnool')) return 'కర్నూలు';
+      if (lower.includes('visakhapatnam')) return 'విశాఖపట్నం';
+      if (lower.includes('srikakulam')) return 'శ్రీకాకుళం';
+      if (lower.includes('nizamabad')) return 'నిజామాబాద్';
+      if (lower.includes('karimnagar')) return 'కరీంనగర్';
+    }
+    return loc;
+  };
+
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider
+      value={{
+        language,
+        setLanguage,
+        t,
+        localizeName,
+        localizeCareerTitle,
+        localizeEducation,
+        localizeLocation,
+      }}
+    >
       {children}
     </LanguageContext.Provider>
   );

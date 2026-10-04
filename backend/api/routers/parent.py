@@ -93,6 +93,9 @@ def get_parent_child_context(
     # Sanitize student identity (exclude passwords, tokens, Aadhaar, private details)
     child_user = student.user
     child_name = child_user.name if child_user else "Your Child"
+    if child_name:
+        import re
+        child_name = re.sub(r"\s*\([^)]*dev[^)]*\)", "", child_name, flags=re.IGNORECASE).strip() or "Your Child"
     relationship_type = primary_assoc.relationship_type or parent_profile.relationship_to_student or "Parent"
 
     # Derive career context authoritatively

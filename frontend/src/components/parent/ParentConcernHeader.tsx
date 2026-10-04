@@ -14,12 +14,13 @@ export const ParentConcernHeader: React.FC<ParentConcernHeaderProps> = ({
   onBack,
   onTalkToPerson,
 }) => {
-  const { t } = useLanguage();
+  const { t, localizeName, localizeCareerTitle } = useLanguage();
 
   const childName = context?.has_linked_student
-    ? context.child_name || 'Your Child'
+    ? localizeName(context.child_name)
     : null;
-  const careerTitle = context?.career?.title || context?.career_status_text;
+  const rawCareer = context?.career?.title || context?.career_status_text;
+  const careerTitle = rawCareer ? localizeCareerTitle(rawCareer) : null;
 
   return (
     <div className="w-full max-w-3xl mx-auto mb-6">
