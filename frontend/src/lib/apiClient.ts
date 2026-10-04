@@ -10,7 +10,8 @@
 
 import { normalizeError } from '@/utils/errors';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const RAW_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://margadharshak.onrender.com';
+const API_BASE_URL = RAW_API_BASE_URL.replace(/\/+$/, '');
 const DEFAULT_TIMEOUT_MS = 60000;
 const MAX_IDEMPOTENT_RETRIES = 2;
 const RETRY_DELAY_MS = 400;

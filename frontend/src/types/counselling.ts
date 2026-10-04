@@ -171,6 +171,15 @@ export interface EscalationResponse {
   career_title?: string | null;
   counselling_session_id?: number | null;
   concern?: string | null;
+  reason?: string | null;
+  priority?: string | null;
+  student_name?: string | null;
+  parent_name?: string | null;
+  assigned_counsellor?: string | null;
+  counsellor_phone?: string | null;
+  emergency_sms?: string | null;
+  call_url?: string | null;
+  sms_url?: string | null;
   language: string;
   conversation_summary?: string | null;
   status: 'pending' | 'in_progress' | 'resolved' | string;

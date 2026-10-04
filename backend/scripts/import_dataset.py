@@ -9,12 +9,12 @@ import sys
 import csv
 import json
 import argparse
-from typing import Dict, Any, List, Set, Tuple
+from typing import Dict, Any, List, Set, Tuple, Optional
 
 # Ensure backend root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import create_engine
 from database.session import SessionLocal
 from database.base import Base
@@ -31,14 +31,27 @@ from scripts.data_mapping import REQUIRED_CSV_COLUMNS
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Import SIH26241 dataset into database")
+    default_csv = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/raw/database.csv"))
+    if not os.path.exists(default_csv):
+        # Fallback if run from workspace root
+        fallback_csv = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend/data/raw/database.csv"))
+        if os.path.exists(fallback_csv):
+            default_csv = fallback_csv
+
+    default_output = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/processed"))
+    if not os.path.exists(default_output):
+        fallback_output = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend/data/processed"))
+        if os.path.exists(fallback_output):
+            default_output = fallback_output
+
     parser.add_argument(
         "--csv-path",
-        default=os.path.abspath(os.path.join(os.path.dirname(__file__), "../../data/raw/database.csv")),
+        default=default_csv,
         help="Path to raw CSV dataset",
     )
     parser.add_argument(
         "--output-dir",
-        default=os.path.abspath(os.path.join(os.path.dirname(__file__), "../../data/processed")),
+        default=default_output,
         help="Path to save data quality report",
     )
     parser.add_argument(

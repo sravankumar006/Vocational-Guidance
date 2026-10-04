@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserCheck, Clock } from 'lucide-react';
+import { UserCheck, Clock, Phone } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import type { EscalationResponse } from '@/types/counselling';
 
@@ -78,16 +78,26 @@ export const HumanEscalationNotice: React.FC<HumanEscalationNoticeProps> = ({
           </div>
         </div>
 
-        {onEscalate && (
-          <button
-            type="button"
-            onClick={onEscalate}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-sm transition-all hover:shadow-md self-end sm:self-auto"
+        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+          <a
+            href="tel:7842547928"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-sm transition-all"
+            title="Call Human Counsellor (7842547928)"
           >
-            <UserCheck className="w-4 h-4" />
-            <span>{t('talkToHumanCounsellor')}</span>
-          </button>
-        )}
+            <Phone className="w-3.5 h-3.5" />
+            <span>Call 7842547928</span>
+          </a>
+          {onEscalate && (
+            <button
+              type="button"
+              onClick={onEscalate}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-sm transition-all hover:shadow-md"
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>{t('talkToHumanCounsellor')}</span>
+            </button>
+          )}
+        </div>
       </div>
     );
   }

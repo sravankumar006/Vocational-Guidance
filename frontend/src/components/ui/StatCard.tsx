@@ -11,6 +11,7 @@ export interface StatCardProps {
     value: string;
     isPositive?: boolean;
   };
+  onClick?: () => void;
   className?: string;
 }
 
@@ -21,10 +22,16 @@ export const StatCard: React.FC<StatCardProps> = ({
   icon,
   badge,
   trend,
+  onClick,
   className = '',
 }) => {
   return (
-    <Card className={`relative ${className}`}>
+    <Card
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      className={`relative ${className}`}
+    >
       <div className="flex items-start justify-between">
         <div className="space-y-1">
           <span className="text-xs font-medium text-text-secondary tracking-normal">

@@ -10,7 +10,7 @@ A full-stack, modular platform designed to connect students with verified vocati
 /
 ├── frontend/    # React + Vite + TypeScript + Tailwind CSS
 ├── backend/     # FastAPI + SQLAlchemy 2.0 + Alembic + Pydantic v2
-├── data/        # Raw and processed vocational reference datasets
+│   └── data/    # Raw and processed vocational reference datasets
 ├── .env.example # Centralized environment configuration template
 └── report.md    # Incremental progress report
 ```

@@ -59,30 +59,48 @@ def get_parent_child_context(
     - Derives career identity from verified database recommendations or preferences.
     """
     parent_profile = current_user.parent_profile
+    primary_assoc = None
+
     if not parent_profile:
-        return ParentChildContextResponse(
-            has_linked_student=False,
-            message="No student profile is linked to your account yet.",
-            career_status_text="Career not selected yet",
+        if current_user.role == UserRole.ADMIN:
+            # Administrative preview: load primary family association in database
+            primary_assoc = db.query(ParentStudentAssociation).first()
+            if not primary_assoc:
+                first_student = db.query(StudentProfile).first()
+                if first_student:
+                    student = first_student
+                    child_user = student.user
+                    child_name = child_user.name if child_user else "Aarav Sharma"
+                    relationship_type = "Parent"
+                else:
+                    return ParentChildContextResponse(
+                        has_linked_student=False,
+                        message="No student profile is linked to your account yet.",
+                        career_status_text="Career not selected yet",
+                    )
+        else:
+            return ParentChildContextResponse(
+                has_linked_student=False,
+                message="No student profile is linked to your account yet.",
+                career_status_text="Career not selected yet",
+            )
+    else:
+        # Query associations for this parent
+        stmt = (
+            select(ParentStudentAssociation)
+            .where(ParentStudentAssociation.parent_profile_id == parent_profile.id)
+            .order_by(ParentStudentAssociation.created_at.asc())
         )
+        associations = list(db.scalars(stmt).all())
+        if not associations:
+            return ParentChildContextResponse(
+                has_linked_student=False,
+                message="No student profile is linked to your account yet.",
+                career_status_text="Career not selected yet",
+            )
+        primary_assoc = associations[0]
 
-    # Query associations for this parent
-    stmt = (
-        select(ParentStudentAssociation)
-        .where(ParentStudentAssociation.parent_profile_id == parent_profile.id)
-        .order_by(ParentStudentAssociation.created_at.asc())
-    )
-    associations = list(db.scalars(stmt).all())
-    if not associations:
-        return ParentChildContextResponse(
-            has_linked_student=False,
-            message="No student profile is linked to your account yet.",
-            career_status_text="Career not selected yet",
-        )
-
-    # Use the primary linked student association
-    primary_assoc = associations[0]
-    student = primary_assoc.student_profile
+    student = primary_assoc.student_profile if primary_assoc else db.query(StudentProfile).first()
     if not student:
         return ParentChildContextResponse(
             has_linked_student=False,

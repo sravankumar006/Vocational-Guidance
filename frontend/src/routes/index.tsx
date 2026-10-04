@@ -28,6 +28,8 @@ import { ParentCounselling } from '@/pages/parent/ParentCounselling';
 // Admin Portal Pages
 import { AdminHome } from '@/pages/admin/AdminHome';
 import { AdminAnalytics } from '@/pages/admin/AdminAnalytics';
+import { AdminConcernAnalytics } from '@/pages/admin/AdminConcernAnalytics';
+import { AdminSentimentAnalytics } from '@/pages/admin/AdminSentimentAnalytics';
 import { AdminData } from '@/pages/admin/AdminData';
 import { AdminEscalations } from '@/pages/admin/AdminEscalations';
 
@@ -59,12 +61,12 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Student Portal Branch (Protected + Role Guard: student ONLY)
+  // Student Portal Branch (Protected + Role Guard: student & admin)
   {
     path: '/student',
     element: (
       <ProtectedRoute>
-        <RoleGuard allowedRoles={['student']}>
+        <RoleGuard allowedRoles={['student', 'admin']}>
           <StudentLayout />
         </RoleGuard>
       </ProtectedRoute>
@@ -93,12 +95,12 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Parent Portal Branch (Protected + Role Guard: parent ONLY)
+  // Parent Portal Branch (Protected + Role Guard: parent & admin)
   {
     path: '/parent',
     element: (
       <ProtectedRoute>
-        <RoleGuard allowedRoles={['parent']}>
+        <RoleGuard allowedRoles={['parent', 'admin']}>
           <ParentLayout />
         </RoleGuard>
       </ProtectedRoute>
@@ -137,6 +139,14 @@ export const router = createBrowserRouter([
       {
         path: 'analytics',
         element: <AdminAnalytics />,
+      },
+      {
+        path: 'analytics/concerns',
+        element: <AdminConcernAnalytics />,
+      },
+      {
+        path: 'analytics/sentiment',
+        element: <AdminSentimentAnalytics />,
       },
       {
         path: 'data',

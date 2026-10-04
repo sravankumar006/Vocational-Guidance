@@ -256,11 +256,20 @@ class EscalationResponse(BaseModel):
     career_title: Optional[str] = None
     counselling_session_id: Optional[int] = None
     concern: Optional[str] = None
+    reason: Optional[str] = None
+    priority: Optional[str] = "medium"
+    student_name: Optional[str] = None
+    parent_name: Optional[str] = None
+    assigned_counsellor: Optional[str] = None
+    counsellor_phone: Optional[str] = "7842547928"
+    emergency_sms: Optional[str] = "emergency this parent/student have concerns about this"
+    call_url: Optional[str] = "tel:7842547928"
+    sms_url: Optional[str] = "sms:7842547928?body=emergency%20this%20parent%2Fstudent%20have%20concerns%20about%20this"
     language: str = "en"
     conversation_summary: Optional[str] = None
     status: str = "pending"
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True, extra="ignore")

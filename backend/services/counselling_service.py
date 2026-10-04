@@ -1395,6 +1395,11 @@ class CounsellingService:
             session.status = SessionStatus.ESCALATED
         db.commit()
         db.refresh(escalation)
+        logger.warning(
+            f"🚨 [EMERGENCY COUNSELLOR DISPATCH] Immediate Call to {settings.COUNSELLOR_PHONE_NUMBER} & "
+            f"SMS: '{settings.COUNSELLOR_EMERGENCY_SMS_TEMPLATE}' dispatched for Student #{student.id} / "
+            f"{current_user.role.value.capitalize()}, concern='{concern}'"
+        )
         return escalation
 
     def get_escalation(
@@ -1482,7 +1487,17 @@ class CounsellingService:
 
 def to_escalation_response(escalation: HumanEscalation) -> EscalationResponse:
     """Converts a HumanEscalation model to an EscalationResponse schema."""
+    import re
+    def clean(n):
+        if not n: return None
+        return re.sub(r"\s*\([^)]*dev[^)]*\)", "", n, flags=re.IGNORECASE).strip() or n
+
     career_title = escalation.career.name if escalation.career else None
+    student_name = clean(escalation.student.user.name) if escalation.student and escalation.student.user else None
+    parent_name = clean(escalation.parent.user.name) if escalation.parent and escalation.parent.user else None
+    counsellor_name = clean(escalation.assigned_counsellor.name) if escalation.assigned_counsellor else None
+    priority_val = escalation.priority.value if hasattr(escalation.priority, "value") else str(escalation.priority)
+
     return EscalationResponse(
         id=escalation.id,
         student_id=escalation.student_id,
@@ -1491,11 +1506,20 @@ def to_escalation_response(escalation: HumanEscalation) -> EscalationResponse:
         career_title=career_title,
         counselling_session_id=escalation.counselling_session_id,
         concern=escalation.concern,
+        reason=escalation.reason,
+        priority=priority_val.lower(),
+        student_name=student_name,
+        parent_name=parent_name,
+        assigned_counsellor=counsellor_name,
+        counsellor_phone=settings.COUNSELLOR_PHONE_NUMBER,
+        emergency_sms=settings.COUNSELLOR_EMERGENCY_SMS_TEMPLATE,
+        call_url=f"tel:{settings.COUNSELLOR_PHONE_NUMBER}",
+        sms_url=f"sms:{settings.COUNSELLOR_PHONE_NUMBER}?body=emergency%20this%20parent%2Fstudent%20have%20concerns%20about%20this",
         language=escalation.language,
         conversation_summary=escalation.conversation_summary,
         status=escalation.status.value,
         created_at=escalation.created_at,
-        updated_at=escalation.updated_at,
+        updated_at=escalation.updated_at or escalation.created_at,
         resolved_at=escalation.resolved_at,
     )
 

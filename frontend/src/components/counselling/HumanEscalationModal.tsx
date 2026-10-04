@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { UserCheck, CheckCircle2, Clock, AlertCircle, X } from 'lucide-react';
+import { UserCheck, CheckCircle2, Clock, AlertCircle, X, Phone, PhoneCall, MessageSquare } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { counsellingService } from '@/services/counselling';
 import type { EscalationResponse } from '@/types/counselling';
+
+export const COUNSELLOR_PHONE = '7842547928';
+export const EMERGENCY_SMS_TEXT = 'emergency this parent/student have concerns about this';
 
 interface HumanEscalationModalProps {
   isOpen: boolean;
@@ -62,6 +65,13 @@ export const HumanEscalationModal: React.FC<HumanEscalationModalProps> = ({
       setNewEscalation(response);
       if (onEscalationSuccess) {
         onEscalationSuccess(response);
+      }
+
+      // Immediately place telephone call to the human counsellor (7842547928)
+      try {
+        window.location.href = `tel:${COUNSELLOR_PHONE}`;
+      } catch (err) {
+        console.warn('Direct telephone call trigger:', err);
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Unable to submit escalation request. Please try again.');
@@ -156,6 +166,38 @@ export const HumanEscalationModal: React.FC<HumanEscalationModalProps> = ({
                 </p>
               </div>
 
+              {/* Emergency Call & SMS Dispatch Hotline */}
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-left space-y-2 max-w-md mx-auto">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+                    <PhoneCall className="w-4 h-4 text-amber-600 animate-pulse" />
+                    <span>Emergency Counsellor Contact: {COUNSELLOR_PHONE}</span>
+                  </div>
+                  <span className="text-[10px] bg-amber-200 text-amber-950 px-2 py-0.5 rounded-full font-bold">
+                    IMMEDIATE DISPATCH
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                  Emergency message alert: <span className="font-semibold italic">"{EMERGENCY_SMS_TEXT}"</span>
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <a
+                    href={`tel:${COUNSELLOR_PHONE}`}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>Call {COUNSELLOR_PHONE}</span>
+                  </a>
+                  <a
+                    href={`sms:${COUNSELLOR_PHONE}?body=${encodeURIComponent(EMERGENCY_SMS_TEXT)}`}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Send SMS Now</span>
+                  </a>
+                </div>
+              </div>
+
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-left space-y-2.5 max-w-md mx-auto">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-500 font-medium">Status</span>
@@ -181,7 +223,7 @@ export const HumanEscalationModal: React.FC<HumanEscalationModalProps> = ({
                   onClick={onClose}
                   className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs shadow-sm transition-colors cursor-pointer"
                 >
-                  OK
+                  Close Confirmation
                 </button>
               </div>
             </div>

@@ -3,8 +3,8 @@
 This directory manages the raw and processed datasets for the Vocational Guidance Platform.
 
 ## Directory Structure
-- `data/raw/database.csv`: Immutable source dataset (10,000 records, 25 columns).
-- `data/processed/`: Generated reports, mappings, and normalized exports. Never edits `raw/`.
+- `backend/data/raw/database.csv`: Immutable source dataset (10,000 records, 25 columns).
+- `backend/data/processed/`: Generated reports, mappings, and normalized exports. Never edits `raw/`.
 
 ## Source Metadata & Provenance
 - **Dataset Identifier**: `SIH26241` (Vocational Outcomes & Parental Concerns Dataset)
