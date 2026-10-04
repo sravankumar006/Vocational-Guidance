@@ -423,7 +423,7 @@ class KnowledgeBase:
         if KnowledgeType.OCCUPATION in target_types:
             occupations = db.query(Occupation).options(
                 joinedload(Occupation.job_outcomes).joinedload(JobOutcome.data_source)
-            ).all()
+            ).filter(Occupation.status != "inactive").all()
             for occ in occupations:
                 items.append(normalize_occupation(occ))
 
@@ -432,7 +432,7 @@ class KnowledgeBase:
             courses = db.query(Course).options(
                 joinedload(Course.provider),
                 joinedload(Course.data_source),
-            ).all()
+            ).filter(Course.status != "inactive").all()
             nsqf_levels_seen = set()
             for crs in courses:
                 if KnowledgeType.COURSE in target_types:
@@ -448,7 +448,7 @@ class KnowledgeBase:
             outcomes = db.query(JobOutcome).options(
                 joinedload(JobOutcome.occupation),
                 joinedload(JobOutcome.data_source),
-            ).all()
+            ).filter(JobOutcome.status != "inactive").all()
             for outcome in outcomes:
                 items.append(normalize_job_outcome(outcome))
 
@@ -456,7 +456,7 @@ class KnowledgeBase:
         if KnowledgeType.PROVIDER in target_types:
             providers = db.query(TrainingProvider).options(
                 joinedload(TrainingProvider.courses)
-            ).all()
+            ).filter(TrainingProvider.status != "inactive").all()
             for tp in providers:
                 items.append(normalize_training_provider(tp))
 
@@ -464,13 +464,13 @@ class KnowledgeBase:
         if KnowledgeType.CAREER_PATH in target_types:
             paths = db.query(CareerPath).options(
                 joinedload(CareerPath.occupations)
-            ).all()
+            ).filter(CareerPath.status != "inactive").all()
             for cp in paths:
                 items.append(normalize_career_path(cp))
 
         # 6. Data Sources
         if KnowledgeType.SOURCE in target_types:
-            sources = db.query(DataSource).all()
+            sources = db.query(DataSource).filter(DataSource.status != "inactive").all()
             for ds in sources:
                 items.append(normalize_data_source(ds))
 

@@ -55,3 +55,11 @@ class SentimentType(str, Enum):
     NEUTRAL = "neutral"
     CONCERNED = "concerned"
     NEGATIVE = "negative"
+
+
+class RecordStatus(str, Enum):
+    DEMO = "demo"
+    UNVERIFIED = "unverified"
+    VERIFIED = "verified"
+    INACTIVE = "inactive"
+

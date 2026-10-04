@@ -25,6 +25,12 @@ class DataSource(Base):
     version: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     retrieved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    status: Mapped[str] = mapped_column(String(50), default="demo", nullable=False, index=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -48,6 +54,15 @@ class TrainingProvider(Base):
     provider_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     contact_info: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
 
+    status: Mapped[str] = mapped_column(String(50), default="demo", nullable=False, index=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    data_source_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("data_sources.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -61,6 +76,7 @@ class TrainingProvider(Base):
         back_populates="provider",
         cascade="all, delete-orphan",
     )
+    data_source: Mapped[Optional["DataSource"]] = relationship("DataSource")
 
 
 class Course(Base):
@@ -74,6 +90,12 @@ class Course(Base):
     qualification_level: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     sector: Mapped[Optional[str]] = mapped_column(String(150), nullable=True, index=True)
     delivery_mode: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    status: Mapped[str] = mapped_column(String(50), default="demo", nullable=False, index=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     provider_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("training_providers.id", ondelete="RESTRICT"), nullable=True, index=True

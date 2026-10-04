@@ -44,6 +44,15 @@ class Occupation(Base):
     sector: Mapped[Optional[str]] = mapped_column(String(150), nullable=True, index=True)
     skill_requirements: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
 
+    status: Mapped[str] = mapped_column(String(50), default="demo", nullable=False, index=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    data_source_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("data_sources.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -52,6 +61,7 @@ class Occupation(Base):
     )
 
     # Relationships
+    data_source: Mapped[Optional["DataSource"]] = relationship("DataSource")
     career_paths: Mapped[List["CareerPath"]] = relationship(
         "CareerPath",
         secondary=career_path_occupations,
@@ -74,6 +84,15 @@ class CareerPath(Base):
     progression_ladder: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
     estimated_duration: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
+    status: Mapped[str] = mapped_column(String(50), default="demo", nullable=False, index=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    data_source_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("data_sources.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -82,6 +101,7 @@ class CareerPath(Base):
     )
 
     # Relationships
+    data_source: Mapped[Optional["DataSource"]] = relationship("DataSource")
     courses: Mapped[List["Course"]] = relationship(
         "Course",
         secondary=career_path_courses,
@@ -120,6 +140,12 @@ class JobOutcome(Base):
     salary_currency: Mapped[str] = mapped_column(String(10), default="INR", nullable=False)
     experience_level: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     region: Mapped[Optional[str]] = mapped_column(String(150), nullable=True, index=True)
+
+    status: Mapped[str] = mapped_column(String(50), default="demo", nullable=False, index=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

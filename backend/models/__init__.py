@@ -10,6 +10,7 @@ from models.enums import (
     EscalationPriority,
     EscalationStatus,
     SentimentType,
+    RecordStatus,
 )
 
 from models.user import (
@@ -54,6 +55,7 @@ __all__ = [
     "EscalationPriority",
     "EscalationStatus",
     "SentimentType",
+    "RecordStatus",
     # 1. User
     "User",
     # 2. StudentProfile
