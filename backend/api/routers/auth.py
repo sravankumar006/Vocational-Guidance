@@ -57,11 +57,14 @@ def _set_refresh_cookie(response: Response, raw_token: str) -> None:
     )
 
 
+from core.rate_limit import rate_limit_login
+
 @router.post("/login", response_model=TokenResponse)
 def login(
     payload: LoginRequest,
     response: Response,
     db: Session = Depends(get_db),
+    _: None = Depends(rate_limit_login),
 ) -> TokenResponse:
     """
     Authenticate user by email or phone and password.

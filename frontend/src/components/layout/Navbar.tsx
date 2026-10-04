@@ -6,7 +6,7 @@ import { LanguageSelector } from '@/components/layout/LanguageSelector';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { Dropdown } from '@/components/ui/Dropdown';
-import { Menu, LogOut, Shield, Compass, Users } from 'lucide-react';
+import { Menu, LogOut, Compass, Users } from 'lucide-react';
 
 export interface NavbarProps {
   onToggleSidebar?: () => void;
@@ -32,42 +32,39 @@ export const Navbar: React.FC<NavbarProps> = ({
     admin: t('adminRole'),
   };
 
-  const userDropdownItems = [
-    {
-      id: 'switch-student',
-      label: 'Switch to Student View',
-      icon: <Compass className="h-4 w-4" />,
-      onClick: async () => {
-        await switchRole('student');
-        navigate('/student');
-      },
-    },
-    {
+  // Only allow switching between parent and student views.
+  // Switching between administrator and others is strictly prohibited.
+  const userDropdownItems = [];
+
+  if (user?.role === 'student') {
+    userDropdownItems.push({
       id: 'switch-parent',
-      label: 'Switch to Parent View',
+      label: t('switchToParent'),
       icon: <Users className="h-4 w-4" />,
       onClick: async () => {
         await switchRole('parent');
         navigate('/parent');
       },
-    },
-    {
-      id: 'switch-admin',
-      label: 'Switch to Admin View',
-      icon: <Shield className="h-4 w-4" />,
+    });
+  } else if (user?.role === 'parent') {
+    userDropdownItems.push({
+      id: 'switch-student',
+      label: t('switchToStudent'),
+      icon: <Compass className="h-4 w-4" />,
       onClick: async () => {
-        await switchRole('admin');
-        navigate('/admin');
+        await switchRole('student');
+        navigate('/student');
       },
-    },
-    {
-      id: 'logout',
-      label: t('logout'),
-      icon: <LogOut className="h-4 w-4" />,
-      danger: true,
-      onClick: handleLogout,
-    },
-  ];
+    });
+  }
+
+  userDropdownItems.push({
+    id: 'logout',
+    label: t('logout'),
+    icon: <LogOut className="h-4 w-4" />,
+    danger: true,
+    onClick: handleLogout,
+  });
 
   return (
     <header className="sticky top-0 z-40 w-full bg-background/95 backdrop-blur-md border-b border-border/50">
@@ -93,6 +90,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm sm:text-base text-text-primary tracking-tight">
                   {t('appName')}
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                  Prototype
                 </span>
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/[0.05] text-text-secondary hidden sm:inline-block">
                   Govt. of India

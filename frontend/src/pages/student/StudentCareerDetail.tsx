@@ -17,6 +17,7 @@ import { careerService } from '@/services/careerService';
 import { CareerDetail } from '@/types/career';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { ExplainAction } from '@/components/counselling/ExplainAction';
 
 export const StudentCareerDetail: React.FC = () => {
   const { careerId } = useParams<{ careerId: string }>();
@@ -119,6 +120,18 @@ export const StudentCareerDetail: React.FC = () => {
               {career.description}
             </p>
           </div>
+
+          <div className="shrink-0 self-start">
+            <ExplainAction
+              intent="explain_career"
+              entityType="career"
+              entityId={career.id}
+              entityTitle={career.name}
+              label="Explain with AI Counsellor"
+              variant="secondary"
+              size="md"
+            />
+          </div>
         </div>
 
         {/* Common Roles Tags */}
@@ -142,63 +155,115 @@ export const StudentCareerDetail: React.FC = () => {
       {/* Sourced Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Monthly Salary */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Monthly Wage Range</span>
-            <Briefcase className="w-4 h-4 text-blue-600" />
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-slate-500 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider">Monthly Wage Range</span>
+              <Briefcase className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="text-xl font-bold text-slate-900">
+              ₹{career.salary_statistics.min_monthly?.toLocaleString('en-IN') || '7,000'} – ₹{career.salary_statistics.max_monthly?.toLocaleString('en-IN') || '25,000'}
+            </div>
+            <p className="text-xs text-slate-500 mt-1.5">
+              Avg starting: ₹{career.salary_statistics.avg_min_monthly?.toLocaleString('en-IN')} / mo
+            </p>
           </div>
-          <div className="text-xl font-bold text-slate-900">
-            ₹{career.salary_statistics.min_monthly?.toLocaleString('en-IN') || '7,000'} – ₹{career.salary_statistics.max_monthly?.toLocaleString('en-IN') || '25,000'}
+          <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+            <ExplainAction
+              intent="explain_salary"
+              entityType="salary"
+              entityId={career.id}
+              entityTitle={career.name}
+              label="Explain this"
+              size="xs"
+              variant="outline"
+            />
           </div>
-          <p className="text-xs text-slate-500 mt-1.5">
-            Avg starting: ₹{career.salary_statistics.avg_min_monthly?.toLocaleString('en-IN')} / mo
-          </p>
         </div>
 
         {/* Metric 2: Placement Rate */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Placement Rate</span>
-            <TrendingUp className="w-4 h-4 text-emerald-600" />
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-slate-500 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider">Placement Rate</span>
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="text-xl font-bold text-emerald-700">
+              {career.placement_statistics.average_placement_rate ? `${career.placement_statistics.average_placement_rate}%` : 'N/A'}
+            </div>
+            <p className="text-xs text-slate-500 mt-1.5">
+              Based on {career.placement_statistics.total_empirical_records.toLocaleString('en-IN')} recorded graduates
+            </p>
           </div>
-          <div className="text-xl font-bold text-emerald-700">
-            {career.placement_statistics.average_placement_rate ? `${career.placement_statistics.average_placement_rate}%` : 'N/A'}
+          <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+            <ExplainAction
+              intent="explain_placement"
+              entityType="placement"
+              entityId={career.id}
+              entityTitle={career.name}
+              label="Explain this"
+              size="xs"
+              variant="outline"
+            />
           </div>
-          <p className="text-xs text-slate-500 mt-1.5">
-            Based on {career.placement_statistics.total_empirical_records.toLocaleString('en-IN')} recorded graduates
-          </p>
         </div>
 
         {/* Metric 3: Training Duration */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Training Duration</span>
-            <Clock className="w-4 h-4 text-amber-600" />
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-slate-500 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider">Training Duration</span>
+              <Clock className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="text-xl font-bold text-slate-900">
+              {career.courses && career.courses.length > 0
+                ? Array.from(new Set(career.courses.map(c => c.duration).filter(Boolean))).join(', ')
+                : '3–6 Months'}
+            </div>
+            <p className="text-xs text-slate-500 mt-1.5">
+              Across {career.courses?.length || 5} accredited programs
+            </p>
           </div>
-          <div className="text-xl font-bold text-slate-900">
-            {career.courses && career.courses.length > 0
-              ? Array.from(new Set(career.courses.map(c => c.duration).filter(Boolean))).join(', ')
-              : '3–6 Months'}
+          <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+            <ExplainAction
+              intent="explain_training"
+              entityType="training"
+              entityId={career.id}
+              entityTitle={career.name}
+              label="Explain this"
+              size="xs"
+              variant="outline"
+            />
           </div>
-          <p className="text-xs text-slate-500 mt-1.5">
-            Across {career.courses?.length || 5} accredited programs
-          </p>
         </div>
 
         {/* Metric 4: Qualification Level */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Qualification Level</span>
-            <Award className="w-4 h-4 text-purple-600" />
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-slate-500 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider">Qualification Level</span>
+              <Award className="w-4 h-4 text-purple-600" />
+            </div>
+            <div className="text-xl font-bold text-slate-900">
+              {career.courses && career.courses.length > 0
+                ? Array.from(new Set(career.courses.map(c => c.qualification_level).filter(Boolean))).join(', ')
+                : 'NSQF Level 3'}
+            </div>
+            <p className="text-xs text-slate-500 mt-1.5">
+              National Skills Qualifications Framework
+            </p>
           </div>
-          <div className="text-xl font-bold text-slate-900">
-            {career.courses && career.courses.length > 0
-              ? Array.from(new Set(career.courses.map(c => c.qualification_level).filter(Boolean))).join(', ')
-              : 'NSQF Level 3'}
+          <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+            <ExplainAction
+              intent="explain_nsqf"
+              entityType="career"
+              entityId={career.id}
+              entityTitle={career.name}
+              label="Explain this"
+              size="xs"
+              variant="outline"
+            />
           </div>
-          <p className="text-xs text-slate-500 mt-1.5">
-            National Skills Qualifications Framework
-          </p>
         </div>
       </div>
 
@@ -206,9 +271,20 @@ export const StudentCareerDetail: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Progression Pathway Ladder */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
-          <div className="flex items-center gap-2 mb-4">
-            <GraduationCap className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-bold text-slate-900">Career Progression Ladder</h2>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-bold text-slate-900">Career Progression Ladder</h2>
+            </div>
+            <ExplainAction
+              intent="explain_career_growth"
+              entityType="pathway"
+              entityId={career.id}
+              entityTitle={career.name}
+              label="Explain this path"
+              size="xs"
+              variant="outline"
+            />
           </div>
           <p className="text-sm text-slate-600 mb-6">
             Realistic advancement milestones as vocational experience and competencies are acquired.
@@ -234,13 +310,24 @@ export const StudentCareerDetail: React.FC = () => {
           </div>
 
           {career.further_education_options && (
-            <div className="mt-6 pt-5 border-t border-slate-100 bg-blue-50/50 rounded-lg p-4 border border-blue-100">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-900 mb-1">
-                Vertical Educational Mobility:
-              </h3>
-              <p className="text-sm text-blue-800 leading-relaxed">
-                {career.further_education_options}
-              </p>
+            <div className="mt-6 pt-5 border-t border-slate-100 bg-blue-50/50 rounded-lg p-4 border border-blue-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-900 mb-1">
+                  Vertical Educational Mobility:
+                </h3>
+                <p className="text-sm text-blue-800 leading-relaxed">
+                  {career.further_education_options}
+                </p>
+              </div>
+              <ExplainAction
+                intent="explain_further_education"
+                entityType="career"
+                entityId={career.id}
+                entityTitle={career.name}
+                label="Explain further study"
+                size="xs"
+                variant="outline"
+              />
             </div>
           )}
         </div>
@@ -342,7 +429,15 @@ export const StudentCareerDetail: React.FC = () => {
 
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                 <span>Mode: {course.delivery_mode || 'Practical / Lab'}</span>
-                <span className="font-medium text-blue-700">Accredited</span>
+                <ExplainAction
+                  intent="explain_course"
+                  entityType="course"
+                  entityId={course.id}
+                  entityTitle={course.name}
+                  label="Explain course"
+                  size="xs"
+                  variant="outline"
+                />
               </div>
             </div>
           ))}

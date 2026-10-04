@@ -54,3 +54,6 @@ export type Language = 'en' | 'te';
 
 export * from './student';
 export * from './career';
+export * from './counselling';
+export * from './parent';
+

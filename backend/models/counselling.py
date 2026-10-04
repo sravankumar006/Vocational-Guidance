@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from sqlalchemy import (
     Integer,
     String,
@@ -12,6 +12,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from database.base import Base
+
+if TYPE_CHECKING:
+    from models.user import User, StudentProfile, ParentProfile
+    from models.career import Occupation
 from models.enums import (
     SessionStatus,
     MessageSenderType,
@@ -149,14 +153,27 @@ class ParentConcern(Base):
 
 
 class HumanEscalation(Base):
-    """Case flagged for intervention by a professional counsellor."""
+    """Case flagged for intervention by a professional counsellor (Phase 9 Brick 31)."""
     __tablename__ = "human_escalations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
-    counselling_session_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("counselling_sessions.id", ondelete="CASCADE"), nullable=False, index=True
+    counselling_session_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("counselling_sessions.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    student_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    parent_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("parent_profiles.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    career_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("occupations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    concern: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    language: Mapped[str] = mapped_column(String(10), default="en", nullable=False)
+    conversation_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     priority: Mapped[EscalationPriority] = mapped_column(
         SQLEnum(EscalationPriority, name="escalation_priority_enum", create_type=False),
         default=EscalationPriority.MEDIUM,
@@ -175,10 +192,16 @@ class HumanEscalation(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    session: Mapped["CounsellingSession"] = relationship("CounsellingSession", back_populates="human_escalations")
+    session: Mapped[Optional["CounsellingSession"]] = relationship("CounsellingSession", back_populates="human_escalations")
+    student: Mapped[Optional["StudentProfile"]] = relationship("StudentProfile")
+    parent: Mapped[Optional["ParentProfile"]] = relationship("ParentProfile")
+    career: Mapped[Optional["Occupation"]] = relationship("Occupation")
     assigned_counsellor: Mapped[Optional["User"]] = relationship("User", foreign_keys=[assigned_to_user_id])
 
 

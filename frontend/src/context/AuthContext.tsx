@@ -9,7 +9,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (identifier?: string, password?: string, role?: UserRole) => Promise<User>;
   logout: () => Promise<void>;
-  switchRole: (role: UserRole) => Promise<User>;
+  switchRole: (role: 'student' | 'parent') => Promise<User>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -76,9 +76,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const switchRole = useCallback(async (role: UserRole) => {
+  const switchRole = useCallback(async (role: 'student' | 'parent') => {
+    // Explicit guard: Only switching between parent and student is allowed.
+    // Switching between administrator and others is strictly prohibited.
+    if (role !== 'student' && role !== 'parent') {
+      throw new Error('Role switching is only permitted between student and parent views.');
+    }
+    if (user?.role === 'admin') {
+      throw new Error('Administrator accounts cannot switch views. Please log out first.');
+    }
     return login(undefined, undefined, role);
-  }, [login]);
+  }, [login, user?.role]);
 
   return (
     <AuthContext.Provider

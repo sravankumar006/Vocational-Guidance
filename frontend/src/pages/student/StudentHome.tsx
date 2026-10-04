@@ -22,6 +22,7 @@ import {
   GraduationCap,
   Clock,
 } from 'lucide-react';
+import { ExplainAction } from '@/components/counselling/ExplainAction';
 
 export const StudentHome: React.FC = () => {
   const navigate = useNavigate();
@@ -306,13 +307,24 @@ export const StudentHome: React.FC = () => {
                         </p>
                       )}
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate('/student/career')}
-                    >
-                      Inspect
-                    </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <ExplainAction
+                        intent="explain_career"
+                        entityType="career"
+                        entityId={career.id}
+                        entityTitle={career.name}
+                        label="Explain"
+                        size="xs"
+                        variant="outline"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate('/student/career')}
+                      >
+                        Inspect
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>

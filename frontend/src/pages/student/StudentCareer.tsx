@@ -31,6 +31,7 @@ import {
 } from '@/types/career';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { ExplainAction } from '@/components/counselling/ExplainAction';
 
 interface IntentOption {
   id: CareerIntent;
@@ -498,15 +499,24 @@ export const StudentCareer: React.FC = () => {
                     )}
                   </div>
 
-                  {/* View Career Action Button */}
-                  <div className="pt-3 border-t border-slate-100">
+                  {/* View Career Action Button & Explain Action */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
                     <button
                       onClick={() => navigate(`/student/career/${career.id}`)}
-                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-600 hover:text-white rounded-lg transition-colors border border-blue-200/60"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-600 hover:text-white rounded-lg transition-colors border border-blue-200/60"
                     >
-                      View Career Pathway
+                      View Pathway
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
+                    <ExplainAction
+                      intent="explain_career"
+                      entityType="career"
+                      entityId={career.id}
+                      entityTitle={career.name}
+                      label="Explain"
+                      size="sm"
+                      variant="outline"
+                    />
                   </div>
                 </div>
               );
@@ -936,21 +946,32 @@ export const StudentCareer: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+                  <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                     <span className="text-[11px] text-slate-500 flex items-center gap-1">
                       <Building2 className="w-3.5 h-3.5 text-slate-400" />
                       {career.providers_count || 5} Providers
                     </span>
-                    <button
-                      onClick={() =>
-                        navigate(`/student/career/${career.id}`, {
-                          state: { searchParams: searchParams.toString() },
-                        })
-                      }
-                      className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-xs"
-                    >
-                      View Pathway
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <ExplainAction
+                        intent="explain_career"
+                        entityType="career"
+                        entityId={career.id}
+                        entityTitle={career.name}
+                        label="Explain"
+                        size="xs"
+                        variant="outline"
+                      />
+                      <button
+                        onClick={() =>
+                          navigate(`/student/career/${career.id}`, {
+                            state: { searchParams: searchParams.toString() },
+                          })
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-xs"
+                      >
+                        View Pathway
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -40,6 +40,19 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # RAG & Vector Retrieval Configuration (Phase 5 Brick 19)
+    EMBEDDING_PROVIDER: str = "local"
+    EMBEDDING_MODEL: str = "text-embedding-004"
+    EMBEDDING_DIMENSION: int = 768
+    RAG_VERIFIED_ONLY_DEFAULT: bool = True
+    RAG_TOP_K_DEFAULT: int = 5
+
+    # AI Counselling Orchestration (Phase 5 Bricks 20, 21 & 25)
+    COUNSELLING_HISTORY_LIMIT: int = 40
+    COUNSELLING_LOW_CONFIDENCE_THRESHOLD: float = 0.50
+    COUNSELLING_MAX_OUTPUT_TOKENS: int = 4096
+    GEMINI_MODEL: str = "gemini-1.5-pro"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

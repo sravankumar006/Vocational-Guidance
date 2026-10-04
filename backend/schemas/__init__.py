@@ -42,4 +42,27 @@ __all__ = [
     "FactorEvaluation",
     "CareerRecommendationItem",
     "CareerRecommendationsResponse",
+    "ParentChildCareer",
+    "ParentChildContextResponse",
+    "CreateParentConcernRequest",
+    "ParentConcernResponse",
+    "CreateEscalationRequest",
+    "EscalationResponse",
 ]
+from schemas.parent import (
+    ParentChildCareer,
+    ParentChildContextResponse,
+    CreateParentConcernRequest,
+    ParentConcernResponse,
+)
+from schemas.counselling import (
+    CreateEscalationRequest,
+    EscalationResponse,
+)
+from schemas.error import (
+    ErrorDetail,
+    ErrorResponse,
+)
+
+__all__.extend(["ErrorDetail", "ErrorResponse"])
+

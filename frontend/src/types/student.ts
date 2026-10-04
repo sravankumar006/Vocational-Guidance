@@ -29,14 +29,8 @@ export interface RecommendedCareerInfo {
   match_reason?: string | null;
 }
 
-export interface CounsellingSessionSummary {
-  id: number;
-  status: string;
-  started_at: string;
-  ended_at?: string | null;
-  message_count: number;
-  last_message_preview?: string | null;
-}
+import type { CounsellingSessionSummary } from './counselling';
+
 
 export interface FamilyStatusInfo {
   has_linked_parent: boolean;
