@@ -1498,6 +1498,7 @@ def to_escalation_response(escalation: HumanEscalation) -> EscalationResponse:
     student_name = clean(escalation.student.user.name) if escalation.student and escalation.student.user else None
     parent_name = clean(escalation.parent.user.name) if escalation.parent and escalation.parent.user else None
     counsellor_name = clean(escalation.assigned_counsellor.name) if escalation.assigned_counsellor else None
+    resolved_by_name = clean(escalation.resolved_by_counsellor.name) if getattr(escalation, "resolved_by_counsellor", None) else None
     priority_val = escalation.priority.value if hasattr(escalation.priority, "value") else str(escalation.priority)
 
     return EscalationResponse(
@@ -1520,9 +1521,12 @@ def to_escalation_response(escalation: HumanEscalation) -> EscalationResponse:
         language=escalation.language,
         conversation_summary=escalation.conversation_summary,
         status=escalation.status.value,
+        started_at=getattr(escalation, "started_at", None),
         created_at=escalation.created_at,
         updated_at=escalation.updated_at or escalation.created_at,
         resolved_at=escalation.resolved_at,
+        resolved_by=resolved_by_name,
+        resolution_notes=getattr(escalation, "resolution_notes", None),
     )
 
 

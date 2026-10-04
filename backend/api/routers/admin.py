@@ -5,12 +5,13 @@ family units, student profiles, parent perspectives, counselling sessions,
 and human escalation management.
 """
 
+import math
 import re
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Tuple, Any
+from typing import List, Optional, Dict, Tuple, Any, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, cast, Date, or_
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import func, desc, cast, Date, or_, case
 
 from database.session import get_db
 from models import (
@@ -80,6 +81,14 @@ from schemas.admin import (
     AIPerformanceTrendPoint,
     AIUnansweredCategoryItem,
     AIPerformanceAnalyticsResponse,
+)
+from schemas.admin_escalation import (
+    EscalationListItem,
+    EscalationDetailItem,
+    EscalationMessageItem,
+    EscalationStatusUpdateRequest,
+    EscalationStats,
+    AdminEscalationsPaginatedResponse,
 )
 from core.config import settings
 from services.counselling_service import counselling_service, to_escalation_response
@@ -469,21 +478,323 @@ def get_admin_sessions(
 
 
 # -------------------------------------------------------------------------
-# 6. Human Escalations & Management
+# 6. Human Escalations & Management (A8)
 # -------------------------------------------------------------------------
+
+def _apply_escalation_status_transition(
+    escalation: HumanEscalation,
+    target_status_raw: str,
+    resolution_notes: Optional[str],
+    assigned_to_user_id: Optional[int],
+    current_user: User,
+    db: Session,
+) -> HumanEscalation:
+    """Applies and strictly validates lifecycle transitions for human escalations."""
+    target = target_status_raw.strip().lower().replace("-", "_").replace(" ", "_")
+    if target not in ["pending", "in_progress", "resolved"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status '{target_status_raw}'. Allowed values are: 'Pending', 'In Progress', 'Resolved'.",
+        )
+
+    current = escalation.status.value if hasattr(escalation.status, "value") else str(escalation.status).lower()
+
+    if current == "pending":
+        if target == "resolved":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Direct transition from 'Pending' to 'Resolved' is not permitted. Cases must first be moved to 'In Progress'.",
+            )
+        elif target == "in_progress":
+            escalation.status = EscalationStatus.IN_PROGRESS
+            if not getattr(escalation, "started_at", None):
+                escalation.started_at = datetime.utcnow()
+            if assigned_to_user_id:
+                escalation.assigned_to_user_id = assigned_to_user_id
+            elif not escalation.assigned_to_user_id:
+                escalation.assigned_to_user_id = current_user.id
+    elif current == "in_progress":
+        if target == "resolved":
+            escalation.status = EscalationStatus.RESOLVED
+            escalation.resolved_at = datetime.utcnow()
+            escalation.resolved_by_user_id = current_user.id
+            if resolution_notes:
+                escalation.resolution_notes = resolution_notes
+        elif target == "pending":
+            escalation.status = EscalationStatus.PENDING
+    elif current == "resolved":
+        if target != "resolved":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This escalation case has already been resolved and cannot be modified.",
+            )
+
+    if assigned_to_user_id is not None and target != "resolved":
+        escalation.assigned_to_user_id = assigned_to_user_id
+
+    if resolution_notes is not None:
+        escalation.resolution_notes = resolution_notes
+
+    db.commit()
+    db.refresh(escalation)
+    return escalation
+
 
 @router.get(
     "/escalations",
-    response_model=List[EscalationResponse],
-    summary="List all escalation records for admin review",
+    response_model=Union[AdminEscalationsPaginatedResponse, List[EscalationResponse]],
+    summary="List escalation records with filtering, search, sorting, and pagination",
 )
 def admin_list_escalations(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    language: Optional[str] = Query(None),
+    concern: Optional[str] = Query(None),
+    career: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    sort: Optional[str] = Query("pending_first"),
+    page: Optional[int] = Query(None, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> List[EscalationResponse]:
-    """Retrieves all human counsellor escalation records across the system."""
-    escalations = counselling_service.list_escalations(db=db, current_user=current_user)
-    return [to_escalation_response(e) for e in escalations]
+) -> Any:
+    """Retrieves human counsellor escalation records with rich search and filtering."""
+    StudentUser = aliased(User, name="st_user")
+    ParentUser = aliased(User, name="pr_user")
+
+    query = (
+        db.query(HumanEscalation)
+        .outerjoin(StudentProfile, HumanEscalation.student_id == StudentProfile.id)
+        .outerjoin(StudentUser, StudentProfile.user_id == StudentUser.id)
+        .outerjoin(ParentProfile, HumanEscalation.parent_id == ParentProfile.id)
+        .outerjoin(ParentUser, ParentProfile.user_id == ParentUser.id)
+        .outerjoin(Occupation, HumanEscalation.career_id == Occupation.id)
+    )
+
+    # 1. Filter: Status
+    if status_filter and status_filter.strip().lower() != "all":
+        st = status_filter.strip().lower().replace("-", "_").replace(" ", "_")
+        if st == "pending":
+            query = query.filter(HumanEscalation.status == EscalationStatus.PENDING)
+        elif st == "in_progress":
+            query = query.filter(HumanEscalation.status == EscalationStatus.IN_PROGRESS)
+        elif st == "resolved":
+            query = query.filter(HumanEscalation.status == EscalationStatus.RESOLVED)
+
+    # 2. Filter: Language
+    if language and language.strip().lower() != "all":
+        query = query.filter(HumanEscalation.language.ilike(f"%{language.strip()}%"))
+
+    # 3. Filter: Concern
+    if concern and concern.strip().lower() != "all":
+        query = query.filter(HumanEscalation.concern.ilike(f"%{concern.strip()}%"))
+
+    # 4. Filter: Career
+    if career and career.strip().lower() != "all":
+        if career.strip().isdigit():
+            query = query.filter(HumanEscalation.career_id == int(career.strip()))
+        else:
+            query = query.filter(Occupation.name.ilike(f"%{career.strip()}%"))
+
+    # 5. Filter: Date range
+    if start_date:
+        try:
+            s_dt = datetime.strptime(start_date[:10], "%Y-%m-%d")
+            query = query.filter(HumanEscalation.created_at >= s_dt)
+        except Exception:
+            pass
+    if end_date:
+        try:
+            e_dt = datetime.strptime(end_date[:10], "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(HumanEscalation.created_at < e_dt)
+        except Exception:
+            pass
+
+    # 6. Filter: Search
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                StudentUser.name.ilike(term),
+                ParentUser.name.ilike(term),
+                Occupation.name.ilike(term),
+                HumanEscalation.concern.ilike(term),
+                HumanEscalation.conversation_summary.ilike(term),
+                HumanEscalation.reason.ilike(term),
+            )
+        )
+
+    # 7. Sorting
+    if sort == "newest":
+        query = query.order_by(HumanEscalation.created_at.desc())
+    elif sort == "oldest":
+        query = query.order_by(HumanEscalation.created_at.asc())
+    elif sort == "recently_updated":
+        query = query.order_by(HumanEscalation.updated_at.desc())
+    else:  # default: pending_first (Pending -> In Progress -> Resolved, each newest first)
+        priority_order = case(
+            (HumanEscalation.status == EscalationStatus.PENDING, 1),
+            (HumanEscalation.status == EscalationStatus.IN_PROGRESS, 2),
+            else_=3,
+        )
+        query = query.order_by(priority_order, HumanEscalation.created_at.desc())
+
+    # If page is not specified, return backwards-compatible plain list
+    if page is None:
+        escalations = query.all()
+        return [to_escalation_response(e) for e in escalations]
+
+    # Paginated response
+    total = query.count()
+    total_pages = max(1, math.ceil(total / page_size)) if page_size > 0 else 1
+    offset = (page - 1) * page_size
+    records = query.offset(offset).limit(page_size).all()
+
+    items = [
+        EscalationListItem(
+            id=e.id,
+            student_id=e.student_id,
+            student_name=_clean_name(e.student.user.name if e.student and e.student.user else None, "Student not specified"),
+            parent_id=e.parent_id,
+            parent_name=_clean_name(e.parent.user.name if e.parent and e.parent.user else None, "Parent Account"),
+            career_id=e.career_id,
+            career_title=e.career.name if e.career else "Career not specified",
+            concern=e.concern or "General Guidance",
+            language=e.language or "en",
+            conversation_summary=e.conversation_summary or e.reason or "Parent/Student sought human counsellor intervention.",
+            reason=e.reason,
+            priority=e.priority.value if hasattr(e.priority, "value") else str(e.priority),
+            status=e.status.value if hasattr(e.status, "value") else str(e.status),
+            counselling_session_id=e.counselling_session_id,
+            assigned_counsellor=_clean_name(e.assigned_counsellor.name if e.assigned_counsellor else None, None),
+            started_at=getattr(e, "started_at", None),
+            created_at=e.created_at,
+            updated_at=getattr(e, "updated_at", None) or e.created_at,
+            resolved_at=getattr(e, "resolved_at", None),
+            is_demo=True,
+        )
+        for e in records
+    ]
+
+    stats = EscalationStats(
+        total=db.query(HumanEscalation).count(),
+        pending=db.query(HumanEscalation).filter(HumanEscalation.status == EscalationStatus.PENDING).count(),
+        in_progress=db.query(HumanEscalation).filter(HumanEscalation.status == EscalationStatus.IN_PROGRESS).count(),
+        resolved=db.query(HumanEscalation).filter(HumanEscalation.status == EscalationStatus.RESOLVED).count(),
+    )
+
+    return AdminEscalationsPaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+        stats=stats,
+    )
+
+
+@router.get(
+    "/escalations/{escalation_id}",
+    response_model=EscalationDetailItem,
+    summary="Get detailed escalation record with conversation context",
+)
+def admin_get_escalation_detail(
+    escalation_id: int,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> EscalationDetailItem:
+    """Retrieves full escalation case context including conversation history."""
+    escalation = db.query(HumanEscalation).filter_by(id=escalation_id).first()
+    if not escalation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Escalation record not found.",
+        )
+
+    # Conversation context (associated session messages)
+    messages: List[EscalationMessageItem] = []
+    if escalation.counselling_session_id:
+        msgs_db = (
+            db.query(CounsellingMessage)
+            .filter(CounsellingMessage.session_id == escalation.counselling_session_id)
+            .order_by(CounsellingMessage.created_at.asc())
+            .all()
+        )
+        messages = [
+            EscalationMessageItem(
+                id=m.id,
+                sender_type=m.sender_type.value if hasattr(m.sender_type, "value") else str(m.sender_type),
+                content=m.content,
+                confidence=m.confidence,
+                requires_human=m.requires_human,
+                created_at=m.created_at,
+            )
+            for m in msgs_db
+        ]
+
+    return EscalationDetailItem(
+        id=escalation.id,
+        student_id=escalation.student_id,
+        student_name=_clean_name(escalation.student.user.name if escalation.student and escalation.student.user else None, "Student not specified"),
+        student_education=escalation.student.education_level if escalation.student else None,
+        student_location=escalation.student.location if escalation.student else None,
+        parent_id=escalation.parent_id,
+        parent_name=_clean_name(escalation.parent.user.name if escalation.parent and escalation.parent.user else None, "Parent Account"),
+        career_id=escalation.career_id,
+        career_title=escalation.career.name if escalation.career else "Career not specified",
+        career_sector=escalation.career.sector if escalation.career else None,
+        career_description=escalation.career.description if escalation.career else None,
+        concern=escalation.concern or "General Guidance",
+        language=escalation.language or "en",
+        conversation_summary=escalation.conversation_summary or escalation.reason or "Parent/Student sought human counsellor intervention.",
+        reason=escalation.reason,
+        priority=escalation.priority.value if hasattr(escalation.priority, "value") else str(escalation.priority),
+        status=escalation.status.value if hasattr(escalation.status, "value") else str(escalation.status),
+        counselling_session_id=escalation.counselling_session_id,
+        assigned_to_user_id=escalation.assigned_to_user_id,
+        assigned_counsellor=_clean_name(escalation.assigned_counsellor.name if escalation.assigned_counsellor else None, None),
+        resolved_by_user_id=getattr(escalation, "resolved_by_user_id", None),
+        resolved_by=_clean_name(escalation.resolved_by_counsellor.name if getattr(escalation, "resolved_by_counsellor", None) else None, None),
+        resolution_notes=getattr(escalation, "resolution_notes", None),
+        started_at=getattr(escalation, "started_at", None),
+        created_at=escalation.created_at,
+        updated_at=getattr(escalation, "updated_at", None) or escalation.created_at,
+        resolved_at=getattr(escalation, "resolved_at", None),
+        is_demo=True,
+        conversation_messages=messages,
+    )
+
+
+@router.patch(
+    "/escalations/{escalation_id}/status",
+    response_model=EscalationDetailItem,
+    summary="Update status with lifecycle validation (Pending -> In Progress -> Resolved)",
+)
+def admin_update_escalation_status(
+    escalation_id: int,
+    payload: EscalationStatusUpdateRequest,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Any:
+    """Explicit status transition endpoint validating status flow."""
+    escalation = db.query(HumanEscalation).filter_by(id=escalation_id).first()
+    if not escalation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Escalation record not found.",
+        )
+
+    escalation = _apply_escalation_status_transition(
+        escalation=escalation,
+        target_status_raw=payload.status,
+        resolution_notes=payload.resolution_notes,
+        assigned_to_user_id=payload.assigned_to_user_id,
+        current_user=current_user,
+        db=db,
+    )
+
+    return admin_get_escalation_detail(escalation_id=escalation.id, current_user=current_user, db=db)
 
 
 @router.patch(
@@ -505,22 +816,15 @@ def admin_update_escalation(
             detail="Escalation record not found.",
         )
 
-    target_status = payload.status.lower()
-    if target_status == "in_progress":
-        escalation.status = EscalationStatus.IN_PROGRESS
-    elif target_status == "resolved":
-        escalation.status = EscalationStatus.RESOLVED
-        escalation.resolved_at = datetime.utcnow()
-    else:
-        escalation.status = EscalationStatus.PENDING
+    escalation = _apply_escalation_status_transition(
+        escalation=escalation,
+        target_status_raw=payload.status,
+        resolution_notes=payload.resolution_notes,
+        assigned_to_user_id=payload.assigned_to_user_id,
+        current_user=current_user,
+        db=db,
+    )
 
-    if payload.assigned_to_user_id is not None:
-        escalation.assigned_to_user_id = payload.assigned_to_user_id
-    elif not escalation.assigned_to_user_id:
-        escalation.assigned_to_user_id = current_user.id
-
-    db.commit()
-    db.refresh(escalation)
     return to_escalation_response(escalation)
 
 

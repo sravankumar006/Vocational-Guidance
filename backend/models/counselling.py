@@ -191,6 +191,12 @@ class HumanEscalation(Base):
     assigned_to_user_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -198,7 +204,6 @@ class HumanEscalation(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     session: Mapped[Optional["CounsellingSession"]] = relationship("CounsellingSession", back_populates="human_escalations")
@@ -206,6 +211,7 @@ class HumanEscalation(Base):
     parent: Mapped[Optional["ParentProfile"]] = relationship("ParentProfile")
     career: Mapped[Optional["Occupation"]] = relationship("Occupation")
     assigned_counsellor: Mapped[Optional["User"]] = relationship("User", foreign_keys=[assigned_to_user_id])
+    resolved_by_counsellor: Mapped[Optional["User"]] = relationship("User", foreign_keys=[resolved_by_user_id])
 
 
 class SentimentEvent(Base):

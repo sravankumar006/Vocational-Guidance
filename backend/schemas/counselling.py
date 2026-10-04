@@ -268,8 +268,11 @@ class EscalationResponse(BaseModel):
     language: str = "en"
     conversation_summary: Optional[str] = None
     status: str = "pending"
+    started_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
+    resolution_notes: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True, extra="ignore")
