@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { ParentConcernCardDef } from '@/types/parent';
 import { useLanguage } from '@/context/LanguageContext';
+import { voiceService } from '@/services/voice';
 
 interface ParentConcernCardProps {
   card: ParentConcernCardDef;
@@ -58,32 +59,22 @@ export const ParentConcernCard: React.FC<ParentConcernCardProps> = ({
   const handleReadAloud = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (!('speechSynthesis' in window)) {
-      return;
-    }
-
     if (isPlaying) {
-      window.speechSynthesis.cancel();
+      voiceService.stopSpeaking();
       setIsPlaying(false);
       return;
     }
 
-    window.speechSynthesis.cancel();
+    voiceService.stopSpeaking();
+    setIsPlaying(true);
     const textToRead = `${title}. ${subtitle}`;
-    const utterance = new SpeechSynthesisUtterance(textToRead);
 
-    if (language === 'te') {
-      utterance.lang = 'te-IN';
-    } else {
-      utterance.lang = 'en-IN';
-    }
-
-    utterance.rate = 0.9;
-    utterance.onstart = () => setIsPlaying(true);
-    utterance.onend = () => setIsPlaying(false);
-    utterance.onerror = () => setIsPlaying(false);
-
-    window.speechSynthesis.speak(utterance);
+    voiceService.speak(
+      textToRead,
+      language,
+      () => setIsPlaying(false),
+      () => setIsPlaying(false)
+    );
   };
 
   return (
@@ -127,7 +118,7 @@ export const ParentConcernCard: React.FC<ParentConcernCardProps> = ({
         {/* Action Controls: Audio Read-Aloud + Forward Arrow */}
         <div className="flex items-center gap-1.5 flex-shrink-0 pl-1">
           {/* Read Aloud Affordance Button for Low-Literacy / Audio preference */}
-          {'speechSynthesis' in window && (
+          {voiceService.isTtsSupported() && (
             <button
               type="button"
               onClick={handleReadAloud}

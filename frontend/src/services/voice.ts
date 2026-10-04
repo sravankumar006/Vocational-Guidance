@@ -151,15 +151,131 @@ export class BrowserSTTProvider implements STTProvider {
   }
 }
 
+let cachedBrowserVoices: SpeechSynthesisVoice[] = [];
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  cachedBrowserVoices = window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => {
+    cachedBrowserVoices = window.speechSynthesis.getVoices();
+  };
+}
+
+function getBestMatchingVoice(targetLang: string): SpeechSynthesisVoice | undefined {
+  const voices =
+    cachedBrowserVoices.length > 0
+      ? cachedBrowserVoices
+      : typeof window !== 'undefined' && 'speechSynthesis' in window
+      ? window.speechSynthesis.getVoices()
+      : [];
+
+  if (targetLang.startsWith('te')) {
+    return voices.find(
+      (v) =>
+        v.lang.toLowerCase().startsWith('te') ||
+        v.name.toLowerCase().includes('telugu') ||
+        v.name.includes('తెలుగు')
+    );
+  }
+
+  return (
+    voices.find((v) => v.lang.toLowerCase() === targetLang.toLowerCase()) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith(targetLang.split('-')[0])) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith('en'))
+  );
+}
+
+function playAudioStream(
+  text: string,
+  language: string,
+  callbacks?: TTSCallbacks
+): { stop: () => void; pause: () => void; resume: () => void } {
+  let isCancelled = false;
+  let audio: HTMLAudioElement | null = null;
+  let objectUrl: string | null = null;
+  const abortController = new AbortController();
+
+  if (callbacks?.onStart) {
+    callbacks.onStart();
+  }
+
+  fetch('/api/voice/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, language }),
+    signal: abortController.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`TTS server error (${res.status})`);
+      if (isCancelled) return;
+      const blob = await res.blob();
+      if (isCancelled) return;
+
+      objectUrl = URL.createObjectURL(blob);
+      audio = new Audio(objectUrl);
+
+      audio.onended = () => {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        if (!isCancelled && callbacks?.onEnd) callbacks.onEnd();
+      };
+
+      audio.onerror = () => {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        if (!isCancelled && callbacks?.onError) {
+          callbacks.onError({ message: 'Telugu voice playback failed', code: 'PLAYBACK_ERROR' });
+        }
+      };
+
+      if (!isCancelled) {
+        await audio.play();
+      }
+    })
+    .catch((err) => {
+      if (err.name === 'AbortError' || isCancelled) return;
+      console.warn('Network TTS streaming failed:', err);
+      if (callbacks?.onError) {
+        callbacks.onError({ message: err.message || 'TTS failed', code: 'NETWORK_ERROR' });
+      }
+    });
+
+  return {
+    stop: () => {
+      isCancelled = true;
+      abortController.abort();
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
+      }
+      if (callbacks?.onEnd) callbacks.onEnd();
+    },
+    pause: () => {
+      if (audio && !audio.paused) {
+        audio.pause();
+      }
+    },
+    resume: () => {
+      if (audio && audio.paused) {
+        audio.play().catch(() => {});
+      }
+    },
+  };
+}
+
 /**
  * Standard Web Speech Synthesis Provider (TTS)
- * Implements intelligent chunking for long AI responses to prevent audio cut-offs.
+ * Implements intelligent chunking for long AI responses and seamlessly falls back
+ * to server-streamed native regional audio when browser lacks verified Telugu voices.
  */
 export class BrowserTTSProvider implements TTSProvider {
   name = 'Browser Web Speech Synthesis';
 
   isSupported(): boolean {
-    return typeof window !== 'undefined' && 'speechSynthesis' in window;
+    return (
+      (typeof window !== 'undefined' && 'speechSynthesis' in window) ||
+      (typeof window !== 'undefined' && 'Audio' in window)
+    );
   }
 
   getSupportedLanguages(): string[] {
@@ -212,14 +328,20 @@ export class BrowserTTSProvider implements TTSProvider {
     language: string,
     callbacks?: TTSCallbacks
   ): { stop: () => void; pause?: () => void; resume?: () => void } {
-    if (!this.isSupported()) {
-      if (callbacks?.onError) {
-        callbacks.onError({
-          message: 'Voice playback is not supported in this browser.',
-          code: 'NOT_SUPPORTED',
-        });
-      }
-      return { stop: () => {} };
+    const isTelugu = language === 'te' || language === 'te-IN';
+    const targetLang = isTelugu ? 'te-IN' : 'en-IN';
+    const matchedVoice = getBestMatchingVoice(targetLang);
+
+    // If Telugu is requested and the browser has NO genuine Telugu voice installed
+    // (typical in desktop Windows browsers where only Microsoft David is available),
+    // use the high-fidelity native Telugu streaming audio endpoint.
+    // This completely prevents English voices from speaking broken random gibberish!
+    if (isTelugu && !matchedVoice) {
+      return playAudioStream(text, 'te', callbacks);
+    }
+
+    if (!('speechSynthesis' in window)) {
+      return playAudioStream(text, isTelugu ? 'te' : 'en', callbacks);
     }
 
     window.speechSynthesis.cancel();
@@ -231,13 +353,6 @@ export class BrowserTTSProvider implements TTSProvider {
     }
 
     let isCancelled = false;
-    const targetLang = language === 'te' || language === 'te-IN' ? 'te-IN' : 'en-IN';
-
-    // Locate matching regional voice if available
-    const availableVoices = window.speechSynthesis.getVoices();
-    const matchedVoice = availableVoices.find(
-      (v) => v.lang.toLowerCase() === targetLang.toLowerCase()
-    ) || availableVoices.find((v) => v.lang.toLowerCase().startsWith(targetLang.split('-')[0]));
 
     if (callbacks?.onStart) {
       callbacks.onStart();
