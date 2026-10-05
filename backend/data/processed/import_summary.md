@@ -1,6 +1,6 @@
 # Dataset Import Summary
 
-- **Source File**: `C:\Users\SAMSUNG\OneDrive\Desktop\sih\data\raw\database.csv`
+- **Source File**: `data/raw/database.csv`
 - **Total Rows Read**: 10000
 - **Valid Rows Processed**: 10000
 - **Aadhaar Data Detected**: False
@@ -11,4 +11,4 @@
 - **occupations**: 15
 - **courses**: 75
 - **career_paths**: 15
-- **job_outcomes**: 10000
+- **job_outcomes**: 1778
