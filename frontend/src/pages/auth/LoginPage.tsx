@@ -128,6 +128,9 @@ export const LoginPage: React.FC = () => {
         <div className="text-[11px] font-medium uppercase tracking-wider text-text-muted text-center mb-2.5">
           {language === 'te' ? 'పరీక్ష ఖాతా ఆధారాలు' : 'Fill Development Credentials'}
         </div>
+        <p className="text-[10px] text-text-muted text-center mb-2.5">
+          click on these buttons i.e student, parent, admin to login
+        </p>
         <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
