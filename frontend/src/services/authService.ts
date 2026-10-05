@@ -3,12 +3,13 @@ import { AuthResponse, User, UserRole } from '@/types';
 
 const TOKEN_KEY = 'sih_auth_token';
 const USER_KEY = 'sih_auth_user';
+const DEV_QUICK_FILL_PASSWORD = 'YourActualPassword';
 
 // Built-in verified identity personas for rapid developer testing & offline fallback
 const FALLBACK_CREDENTIALS: Record<UserRole, { identifier: string; defaultPass: string }> = {
-  student: { identifier: 'student@sih.gov.in', defaultPass: 'Margadarshak@2026' },
-  parent: { identifier: 'parent@sih.gov.in', defaultPass: 'Margadarshak@2026' },
-  admin: { identifier: 'admin@sih.gov.in', defaultPass: 'Margadarshak@2026' },
+  student: { identifier: 'student@sih.gov.in', defaultPass: DEV_QUICK_FILL_PASSWORD },
+  parent: { identifier: 'parent@sih.gov.in', defaultPass: DEV_QUICK_FILL_PASSWORD },
+  admin: { identifier: 'admin@sih.gov.in', defaultPass: DEV_QUICK_FILL_PASSWORD },
 };
 
 const FALLBACK_PERSONAS: Record<UserRole, User> = {

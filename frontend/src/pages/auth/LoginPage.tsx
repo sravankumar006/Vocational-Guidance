@@ -9,6 +9,8 @@ import { Alert } from '@/components/ui/Alert';
 import { UserRole } from '@/types';
 import { Compass, Users, Shield, Lock, User as UserIcon } from 'lucide-react';
 
+const DEV_QUICK_FILL_PASSWORD = 'YourActualPassword';
+
 export const LoginPage: React.FC = () => {
   const { user, isAuthenticated, login, loading } = useAuth();
   const { t, language } = useLanguage();
@@ -129,7 +131,7 @@ export const LoginPage: React.FC = () => {
         <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
-            onClick={() => fillTestCredentials('student@sih.gov.in', 'Margadarshak@2026')}
+            onClick={() => fillTestCredentials('student@sih.gov.in', DEV_QUICK_FILL_PASSWORD)}
             className="flex flex-col items-center justify-center p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] border border-border/30 hover:border-border/60 text-text-secondary hover:text-text-primary transition-all text-center"
           >
             <Compass className="h-4 w-4 mb-1 text-slate-400" />
@@ -138,7 +140,7 @@ export const LoginPage: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => fillTestCredentials('parent@sih.gov.in', 'Margadarshak@2026')}
+            onClick={() => fillTestCredentials('parent@sih.gov.in', DEV_QUICK_FILL_PASSWORD)}
             className="flex flex-col items-center justify-center p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] border border-border/30 hover:border-border/60 text-text-secondary hover:text-text-primary transition-all text-center"
           >
             <Users className="h-4 w-4 mb-1 text-slate-400" />
@@ -147,7 +149,7 @@ export const LoginPage: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => fillTestCredentials('admin@sih.gov.in', 'Margadarshak@2026')}
+            onClick={() => fillTestCredentials('admin@sih.gov.in', DEV_QUICK_FILL_PASSWORD)}
             className="flex flex-col items-center justify-center p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] border border-border/30 hover:border-border/60 text-text-secondary hover:text-text-primary transition-all text-center"
           >
             <Shield className="h-4 w-4 mb-1 text-slate-400" />
