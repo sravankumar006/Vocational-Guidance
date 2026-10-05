@@ -82,6 +82,7 @@ from schemas.admin import (
     AIUnansweredCategoryItem,
     AIPerformanceAnalyticsResponse,
 )
+from models.enums import UserRole
 from schemas.admin_escalation import (
     EscalationListItem,
     EscalationDetailItem,
@@ -89,6 +90,9 @@ from schemas.admin_escalation import (
     EscalationStatusUpdateRequest,
     EscalationStats,
     AdminEscalationsPaginatedResponse,
+    CounsellorOption,
+    AssignCounsellorRequest,
+    EscalationPriorityUpdateRequest,
 )
 from core.config import settings
 from services.counselling_service import counselling_service, to_escalation_response
@@ -826,6 +830,103 @@ def admin_update_escalation(
     )
 
     return to_escalation_response(escalation)
+
+
+@router.get("/counsellors", response_model=List[CounsellorOption])
+def list_counsellors(
+    current_admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> List[CounsellorOption]:
+    """List staff members available for case assignment (admins and professional counsellors)."""
+    users = (
+        db.query(User)
+        .filter(User.role.in_([UserRole.ADMIN, UserRole.COUNSELLOR]))
+        .order_by(User.name.asc())
+        .all()
+    )
+    return [
+        CounsellorOption(
+            id=u.id,
+            name=_clean_name(u.name, "Staff Member"),
+            email=u.email,
+            role=u.role.value if hasattr(u.role, "value") else str(u.role),
+        )
+        for u in users
+    ]
+
+
+@router.patch("/escalations/{escalation_id}/assign", response_model=EscalationDetailItem)
+def assign_counsellor_to_escalation(
+    escalation_id: int,
+    payload: AssignCounsellorRequest,
+    current_admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> EscalationDetailItem:
+    """Assign, reassign, or unassign a counsellor for an escalation case.
+
+    Only authenticated Admin users can perform assignment operations.
+    """
+    escalation = db.query(HumanEscalation).filter_by(id=escalation_id).first()
+    if not escalation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Escalation record not found.",
+        )
+
+    if payload.assigned_to_user_id is not None:
+        target_user = db.query(User).filter_by(id=payload.assigned_to_user_id).first()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="Selected counsellor or staff member not found.")
+        escalation.assigned_to_user_id = target_user.id
+        # Automatically transition Pending cases to In Progress upon assignment if not already started
+        if escalation.status == EscalationStatus.PENDING:
+            escalation.status = EscalationStatus.IN_PROGRESS
+            if not getattr(escalation, "started_at", None):
+                escalation.started_at = datetime.utcnow()
+    else:
+        # Unassign
+        escalation.assigned_to_user_id = None
+
+    escalation.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(escalation)
+    return admin_get_escalation_detail(escalation_id=escalation.id, current_user=current_admin, db=db)
+
+
+@router.patch("/escalations/{escalation_id}/priority", response_model=EscalationDetailItem)
+def update_escalation_priority(
+    escalation_id: int,
+    payload: EscalationPriorityUpdateRequest,
+    current_admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> EscalationDetailItem:
+    """Update escalation priority level: Normal, High, or Urgent."""
+    escalation = db.query(HumanEscalation).filter_by(id=escalation_id).first()
+    if not escalation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Escalation record not found.",
+        )
+
+    norm_pri = payload.priority.strip().lower()
+    if norm_pri in ("normal", "medium", "standard"):
+        escalation.priority = EscalationPriority.MEDIUM
+    elif norm_pri == "high":
+        escalation.priority = EscalationPriority.HIGH
+    elif norm_pri == "urgent":
+        escalation.priority = EscalationPriority.URGENT
+    elif norm_pri == "low":
+        escalation.priority = EscalationPriority.LOW
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid priority value. Supported values: 'normal', 'high', 'urgent'.",
+        )
+
+    escalation.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(escalation)
+    return admin_get_escalation_detail(escalation_id=escalation.id, current_user=current_admin, db=db)
 
 
 # -------------------------------------------------------------------------
@@ -2160,12 +2261,56 @@ def _calculate_geographic_analytics(
             "concern": c_type,
         })
 
+    # C. Human Escalations
+    esc_query = (
+        db.query(
+            HumanEscalation.id,
+            HumanEscalation.created_at,
+            HumanEscalation.concern,
+            HumanEscalation.career_id,
+            ParentProfile.location.label("parent_loc"),
+            StudentProfile.location.label("student_loc"),
+            Occupation.name.label("career_name"),
+        )
+        .outerjoin(StudentProfile, HumanEscalation.student_id == StudentProfile.id)
+        .outerjoin(ParentProfile, HumanEscalation.parent_id == ParentProfile.id)
+        .outerjoin(Occupation, HumanEscalation.career_id == Occupation.id)
+    )
+    if start_cutoff:
+        esc_query = esc_query.filter(HumanEscalation.created_at >= start_cutoff)
+    if end_cutoff:
+        esc_query = esc_query.filter(HumanEscalation.created_at <= end_cutoff)
+    if concern:
+        esc_query = esc_query.filter(HumanEscalation.concern.ilike(f"%{concern}%"))
+    if career_id:
+        esc_query = esc_query.filter(HumanEscalation.career_id == career_id)
+
+    for eid, e_time, e_concern, e_car_id, p_loc, st_loc, e_car_name in esc_query.all():
+        d, s, r = _parse_location(p_loc or st_loc)
+
+        if state and s.lower() != state.lower():
+            continue
+        if district and d.lower() != district.lower():
+            continue
+        if region and r.lower() != region.lower():
+            continue
+
+        matched_events.append({
+            "type": "escalation",
+            "date": e_time.strftime("%Y-%m-%d") if e_time else "2026-10-01",
+            "district": d,
+            "state": s,
+            "region": r,
+            "career": e_car_name or target_career_name or "General Vocational",
+            "concern": e_concern,
+        })
+
     total_activity = len(matched_events)
 
     # 3. Aggregations (State, District, Region, Trend, Careers, Concerns)
-    state_counts: Dict[str, int] = {}
-    district_counts: Dict[str, int] = {}
-    region_counts: Dict[str, int] = {}
+    state_metrics: Dict[str, Dict[str, int]] = {}
+    district_metrics: Dict[str, Dict[str, int]] = {}
+    region_metrics: Dict[str, Dict[str, int]] = {}
     date_counts: Dict[str, int] = {}
     career_counts: Dict[str, int] = {}
     concern_counts: Dict[str, int] = {}
@@ -2177,10 +2322,19 @@ def _calculate_geographic_analytics(
         dt = ev["date"]
         car = ev["career"]
         con = ev["concern"]
+        etype = ev["type"]
 
-        state_counts[st] = state_counts.get(st, 0) + 1
-        district_counts[dist] = district_counts.get(dist, 0) + 1
-        region_counts[reg] = region_counts.get(reg, 0) + 1
+        for metrics_map, loc in [(state_metrics, st), (district_metrics, dist), (region_metrics, reg)]:
+            if loc not in metrics_map:
+                metrics_map[loc] = {"total": 0, "sessions": 0, "concerns": 0, "escalations": 0}
+            metrics_map[loc]["total"] += 1
+            if etype == "session":
+                metrics_map[loc]["sessions"] += 1
+            elif etype == "concern":
+                metrics_map[loc]["concerns"] += 1
+            elif etype == "escalation":
+                metrics_map[loc]["escalations"] += 1
+
         date_counts[dt] = date_counts.get(dt, 0) + 1
 
         if car and car != "General Vocational":
@@ -2188,16 +2342,34 @@ def _calculate_geographic_analytics(
         if con:
             concern_counts[con] = concern_counts.get(con, 0) + 1
 
-    def _to_items(counts_map: Dict[str, int]) -> List[GeographicLocationItem]:
+    def _to_items(metrics_map: Dict[str, Dict[str, int]]) -> List[GeographicLocationItem]:
         items = []
-        for loc_name, count in counts_map.items():
-            pct = round((count / total_activity) * 100, 1) if total_activity > 0 else 0.0
-            items.append(GeographicLocationItem(location=loc_name, count=count, percentage=pct))
+        for loc_name, m in metrics_map.items():
+            tot = m["total"]
+            pct = round((tot / total_activity) * 100, 1) if total_activity > 0 else 0.0
+            sess = m["sessions"]
+            conc = m["concerns"]
+            escs = m["escalations"]
+            if sess > 0:
+                res_rate = round((max(0, sess - escs) / sess) * 100, 1)
+            else:
+                res_rate = 100.0 if escs == 0 else 0.0
+            items.append(
+                GeographicLocationItem(
+                    location=loc_name,
+                    count=tot,
+                    percentage=pct,
+                    sessions=sess,
+                    concerns=conc,
+                    escalations=escs,
+                    ai_resolution_rate=res_rate,
+                )
+            )
         return sorted(items, key=lambda x: x.count, reverse=True)
 
-    states_list = _to_items(state_counts)
-    districts_list = _to_items(district_counts)
-    regions_list = _to_items(region_counts)
+    states_list = _to_items(state_metrics)
+    districts_list = _to_items(district_metrics)
+    regions_list = _to_items(region_metrics)
 
     trend_list = [
         GeographicTrendPoint(date=d_key, count=c_val)
@@ -2382,10 +2554,11 @@ def _calculate_ai_performance_analytics(
     for s in sessions:
         d_key = s.started_at.strftime("%Y-%m-%d") if s.started_at else "2026-10-01"
         if d_key not in date_buckets:
-            date_buckets[d_key] = {"total": 0, "resolved": 0, "escalated": 0, "low_conf": 0}
+            date_buckets[d_key] = {"total": 0, "resolved": 0, "escalated": 0, "low_conf": 0, "unanswered": 0}
         date_buckets[d_key]["total"] += 1
         if s.id in escalated_session_ids:
             date_buckets[d_key]["escalated"] += 1
+            date_buckets[d_key]["unanswered"] += 1
         elif s.status == SessionStatus.COMPLETED:
             date_buckets[d_key]["resolved"] += 1
 
@@ -2394,6 +2567,11 @@ def _calculate_ai_performance_analytics(
         if d_key in date_buckets:
             date_buckets[d_key]["low_conf"] += 1
 
+    for m in unanswered_msgs:
+        d_key = m.created_at.strftime("%Y-%m-%d") if m.created_at else "2026-10-01"
+        if d_key in date_buckets:
+            date_buckets[d_key]["unanswered"] += 1
+
     trend_points = [
         AIPerformanceTrendPoint(
             date=d_key,
@@ -2401,6 +2579,7 @@ def _calculate_ai_performance_analytics(
             resolved=vals["resolved"],
             escalated=vals["escalated"],
             low_confidence=vals["low_conf"],
+            unanswered=vals["unanswered"],
         )
         for d_key, vals in sorted(date_buckets.items(), key=lambda x: x[0])
     ]

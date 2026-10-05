@@ -327,6 +327,10 @@ export interface GeographicLocationItem {
   location: string;
   count: number;
   percentage: number;
+  sessions?: number;
+  concerns?: number;
+  escalations?: number;
+  ai_resolution_rate?: number;
 }
 
 export interface GeographicTrendPoint {
@@ -401,6 +405,7 @@ export interface AIPerformanceTrendPoint {
   resolved: number;
   escalated: number;
   low_confidence: number;
+  unanswered?: number;
 }
 
 export interface AIUnansweredCategoryItem {

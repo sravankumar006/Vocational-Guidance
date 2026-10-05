@@ -26,36 +26,13 @@ logger = logging.getLogger("sih.startup")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure database schema is initialized on any cloud provider (Render/Railway/Fly)
+    # Schema changes are managed explicitly with Alembic before the app starts.
     try:
-        from database.session import engine, SessionLocal
-        from database.base import Base, prepare_pgvector
-        import models  # Ensures all models are registered on Base.metadata
-        
-        try:
-            prepare_pgvector(engine)
-        except Exception as pg_err:
-            logger.info(f"prepare_pgvector skipped (normal for SQLite / non-superuser): {pg_err}")
-            
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables initialized successfully.")
-        
-        # Self-heal initial occupations and analytics seed data if database is empty
-        try:
-            from models import Occupation
-            db = SessionLocal()
-            try:
-                occ_count = db.query(Occupation).count()
-                if occ_count == 0:
-                    logger.info("Empty database detected. Running auto-seed...")
-                    from scripts.check_and_seed import seed_analytics_data
-                    seed_analytics_data(db)
-            finally:
-                db.close()
-        except Exception as seed_err:
-            logger.warning(f"Auto-seed check non-blocking warning: {seed_err}")
+        from database.session import engine
+        with engine.connect():
+            logger.info("Database connection available.")
     except Exception as e:
-        logger.error(f"Startup database initialization error: {e}", exc_info=True)
+        logger.error(f"Startup database connection error: {e}", exc_info=True)
     
     yield
 

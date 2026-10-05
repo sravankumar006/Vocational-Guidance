@@ -85,7 +85,6 @@ class EscalationStats(BaseModel):
     in_progress: int = 0
     resolved: int = 0
 
-
 class AdminEscalationsPaginatedResponse(BaseModel):
     items: List[EscalationListItem]
     total: int
@@ -95,3 +94,20 @@ class AdminEscalationsPaginatedResponse(BaseModel):
     stats: EscalationStats
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CounsellorOption(BaseModel):
+    id: int
+    name: str
+    email: Optional[str] = None
+    role: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AssignCounsellorRequest(BaseModel):
+    assigned_to_user_id: Optional[int] = Field(None, description="User ID of the counsellor/admin to assign, or null to unassign")
+
+
+class EscalationPriorityUpdateRequest(BaseModel):
+    priority: str = Field(..., description="Priority: low, normal, medium, high, urgent")

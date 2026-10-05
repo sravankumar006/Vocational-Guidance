@@ -29,18 +29,37 @@ from models import (
 from scripts.data_mapping import REQUIRED_CSV_COLUMNS
 
 
+from core.config import settings, Settings
+
+
+def find_default_csv() -> str:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidate_paths = [
+        os.path.abspath(os.path.join(script_dir, "../data/raw/database.csv")),
+        os.path.abspath(os.path.join(script_dir, "../../data/raw/database.csv")),
+        os.path.abspath(os.path.join(script_dir, "../../data/database.csv")),
+        os.path.abspath(os.path.join(script_dir, "../../database.csv")),
+        os.path.abspath(os.path.join(script_dir, "../../database")),
+        os.path.abspath(os.path.join(os.getcwd(), "data/raw/database.csv")),
+        os.path.abspath(os.path.join(os.getcwd(), "data/database.csv")),
+        os.path.abspath(os.path.join(os.getcwd(), "backend/data/raw/database.csv")),
+        os.path.abspath(os.path.join(os.getcwd(), "database.csv")),
+        os.path.abspath(os.path.join(os.getcwd(), "database")),
+    ]
+    for p in candidate_paths:
+        if os.path.exists(p) and os.path.isfile(p):
+            return p
+    return candidate_paths[0]
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Import SIH26241 dataset into database")
-    default_csv = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/raw/database.csv"))
-    if not os.path.exists(default_csv):
-        # Fallback if run from workspace root
-        fallback_csv = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend/data/raw/database.csv"))
-        if os.path.exists(fallback_csv):
-            default_csv = fallback_csv
+    default_csv = find_default_csv()
 
-    default_output = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/processed"))
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    default_output = os.path.abspath(os.path.join(script_dir, "../data/processed"))
     if not os.path.exists(default_output):
-        fallback_output = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend/data/processed"))
+        fallback_output = os.path.abspath(os.path.join(script_dir, "../../backend/data/processed"))
         if os.path.exists(fallback_output):
             default_output = fallback_output
 
@@ -179,8 +198,15 @@ def import_data(rows: List[Dict[str, str]], session: Session) -> Dict[str, int]:
         cp.name: cp for cp in session.query(CareerPath).all()
     }
 
+    # Load existing job outcomes keys to ensure idempotency on repeated runs
+    existing_outcomes_set: Set[Tuple[int, int, str]] = set()
+    if session.query(JobOutcome).count() > 0:
+        existing_outcomes_set = set(
+            session.query(JobOutcome.occupation_id, JobOutcome.career_path_id, JobOutcome.region).all()
+        )
+
     # 2. Extract and upsert reference entities
-    for row in rows:
+    for row_idx, row in enumerate(rows, start=1):
         # A. TrainingProvider
         p_name = row["training_provider"].strip()
         p_type = row["training_provider_type"].strip()
@@ -256,19 +282,27 @@ def import_data(rows: List[Dict[str, str]], session: Session) -> Dict[str, int]:
         career_path = career_paths_cache[pathway_clean_name]
 
         # E. JobOutcome (Region-specific sourced outcome)
-        job_outcome = JobOutcome(
-            occupation_id=occupation.id,
-            career_path_id=career_path.id,
-            data_source_id=data_source.id,
-            employment_rate=float(row["placement_rate_percent"]),
-            salary_range_min=int(row["minimum_monthly_earnings_inr"]),
-            salary_range_max=int(row["maximum_monthly_earnings_inr"]),
-            salary_currency="INR",
-            experience_level=row["region_type"].strip(),
-            region=f"{row['district'].strip()}, {row['state'].strip()}",
-        )
-        session.add(job_outcome)
-        counts["job_outcomes"] += 1
+        region_str = f"{row['district'].strip()}, {row['state'].strip()}"
+        outcome_key = (occupation.id, career_path.id, region_str)
+        if outcome_key not in existing_outcomes_set:
+            job_outcome = JobOutcome(
+                occupation_id=occupation.id,
+                career_path_id=career_path.id,
+                data_source_id=data_source.id,
+                employment_rate=float(row["placement_rate_percent"]),
+                salary_range_min=int(row["minimum_monthly_earnings_inr"]),
+                salary_range_max=int(row["maximum_monthly_earnings_inr"]),
+                salary_currency="INR",
+                experience_level=row["region_type"].strip(),
+                region=region_str,
+            )
+            session.add(job_outcome)
+            existing_outcomes_set.add(outcome_key)
+            counts["job_outcomes"] += 1
+
+        # Periodic flush to keep database cursor memory low
+        if row_idx % 500 == 0:
+            session.flush()
 
     return counts
 
@@ -286,11 +320,14 @@ def main():
     print(f"Aadhaar Detected     : {report['aadhaar_detected']}")
 
     # Save Quality Report
-    os.makedirs(args.output_dir, exist_ok=True)
-    report_json_path = os.path.join(args.output_dir, "data_quality_report.json")
-    with open(report_json_path, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2)
-    print(f"Data quality report saved to: {report_json_path}")
+    try:
+        os.makedirs(args.output_dir, exist_ok=True)
+        report_json_path = os.path.join(args.output_dir, "data_quality_report.json")
+        with open(report_json_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        print(f"Data quality report saved to: {report_json_path}")
+    except Exception as report_err:
+        print(f"Notice: skipped writing data quality report: {report_err}")
 
     if args.dry_run:
         print("Dry run requested. Skipping database commit.")
@@ -298,8 +335,8 @@ def main():
 
     # Choose session engine
     if args.db_url:
-        engine = create_engine(args.db_url)
-        Base.metadata.create_all(bind=engine)
+        normalized_url = Settings.assemble_database_url(args.db_url)
+        engine = create_engine(normalized_url)
         SessionTest = sessionmaker(bind=engine)
         session = SessionTest()
     else:
@@ -314,17 +351,20 @@ def main():
             print(f" - {entity.capitalize()}: {count} records")
 
         # Save summary markdown
-        summary_md_path = os.path.join(args.output_dir, "import_summary.md")
-        with open(summary_md_path, "w", encoding="utf-8") as f:
-            f.write("# Dataset Import Summary\n\n")
-            f.write(f"- **Source File**: `{args.csv_path}`\n")
-            f.write(f"- **Total Rows Read**: {report['total_rows']}\n")
-            f.write(f"- **Valid Rows Processed**: {report['valid_rows']}\n")
-            f.write(f"- **Aadhaar Data Detected**: {report['aadhaar_detected']}\n\n")
-            f.write("### Records Created / Upserted:\n")
-            for entity, count in counts.items():
-                f.write(f"- **{entity}**: {count}\n")
-        print(f"Import summary saved to: {summary_md_path}")
+        try:
+            summary_md_path = os.path.join(args.output_dir, "import_summary.md")
+            with open(summary_md_path, "w", encoding="utf-8") as f:
+                f.write("# Dataset Import Summary\n\n")
+                f.write(f"- **Source File**: `{args.csv_path}`\n")
+                f.write(f"- **Total Rows Read**: {report['total_rows']}\n")
+                f.write(f"- **Valid Rows Processed**: {report['valid_rows']}\n")
+                f.write(f"- **Aadhaar Data Detected**: {report['aadhaar_detected']}\n\n")
+                f.write("### Records Created / Upserted:\n")
+                for entity, count in counts.items():
+                    f.write(f"- **{entity}**: {count}\n")
+            print(f"Import summary saved to: {summary_md_path}")
+        except Exception as summary_err:
+            print(f"Notice: skipped writing import summary: {summary_err}")
     except Exception as e:
         session.rollback()
         print(f"Import failed with error: {e}")

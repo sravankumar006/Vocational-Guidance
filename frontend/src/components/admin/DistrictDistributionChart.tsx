@@ -93,17 +93,57 @@ export const DistrictDistributionChart: React.FC<DistrictDistributionChartProps>
         </ResponsiveContainer>
       </div>
 
-      {/* Breakdown list */}
-      <div className="mt-3 space-y-2 border-t border-border/30 pt-3">
-        {data.slice(0, 5).map((dist) => (
-          <div key={dist.location} className="flex items-center justify-between text-xs">
-            <span className="font-medium text-text-secondary">{dist.location}</span>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-text-primary">{dist.count}</span>
-              <span className="text-text-muted w-12 text-right">({dist.percentage}%)</span>
-            </div>
-          </div>
-        ))}
+      {/* District Drilldown Table */}
+      <div className="mt-4 border-t border-border/40 pt-3">
+        <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+          District Drilldown Telemetry
+        </h4>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-border/60 text-[11px] font-semibold text-text-muted uppercase">
+                <th className="py-2 pr-3">District</th>
+                <th className="py-2 px-2 text-right">Sessions</th>
+                <th className="py-2 px-2 text-right">Concerns</th>
+                <th className="py-2 px-2 text-right">Escalations</th>
+                <th className="py-2 px-2 text-right">AI Resolution</th>
+                <th className="py-2 pl-3 text-right">Share</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/40">
+              {data.slice(0, 10).map((dist) => (
+                <tr key={dist.location} className="hover:bg-surface-elevated/40 transition-colors">
+                  <td className="py-2 pr-3 font-medium text-text-primary whitespace-nowrap">
+                    {dist.location}
+                  </td>
+                  <td className="py-2 px-2 text-right text-text-secondary">
+                    {dist.sessions ?? '—'}
+                  </td>
+                  <td className="py-2 px-2 text-right text-amber-400 font-medium">
+                    {dist.concerns ?? '—'}
+                  </td>
+                  <td className="py-2 px-2 text-right text-rose-400 font-medium">
+                    {dist.escalations ?? '—'}
+                  </td>
+                  <td className="py-2 px-2 text-right">
+                    <span className={`font-semibold ${
+                      (dist.ai_resolution_rate ?? 0) >= 75
+                        ? 'text-emerald-400'
+                        : (dist.ai_resolution_rate ?? 0) >= 50
+                        ? 'text-amber-400'
+                        : 'text-text-secondary'
+                    }`}>
+                      {dist.ai_resolution_rate !== undefined ? `${dist.ai_resolution_rate}%` : '—'}
+                    </span>
+                  </td>
+                  <td className="py-2 pl-3 text-right font-semibold text-sky-400">
+                    {dist.percentage}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

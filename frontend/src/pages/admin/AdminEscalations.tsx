@@ -297,6 +297,10 @@ export const AdminEscalations: React.FC = () => {
             handleOpenTransitionModal(selectedDetail, target);
           }
         }}
+        onEscalationUpdated={(updated) => {
+          setSelectedDetail(updated);
+          fetchEscalations(filters);
+        }}
       />
 
       <EscalationConfirmationModal

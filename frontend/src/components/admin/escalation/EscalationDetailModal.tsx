@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   User,
@@ -10,30 +10,61 @@ import {
   FileText,
   MessageSquare,
   FlaskConical,
-  Shield,
   Bot,
   UserCheck,
+  Sparkles,
+  Loader2,
+  History,
 } from 'lucide-react';
-import type { EscalationDetailItem } from '@/types/adminEscalation';
+import type { EscalationDetailItem, CounsellorOption } from '@/types/adminEscalation';
+import { adminEscalationService } from '@/services/adminEscalationService';
 import { EscalationStatusBadge } from './EscalationStatusBadge';
 import { EscalationPriorityBadge } from './EscalationPriorityBadge';
+import { Button } from '@/components/ui/Button';
 
 interface EscalationDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   escalation: EscalationDetailItem | null;
   onTransitionStatus?: (targetStatus: 'in_progress' | 'resolved') => void;
+  onEscalationUpdated?: (updated: EscalationDetailItem) => void;
 }
 
 export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
   isOpen,
   onClose,
-  escalation,
+  escalation: initialEscalation,
   onTransitionStatus,
+  onEscalationUpdated,
 }) => {
+  const [escalation, setEscalation] = useState<EscalationDetailItem | null>(initialEscalation);
   const [activeTab, setActiveTab] = useState<'case_info' | 'conversation'>('case_info');
 
-  if (!isOpen || !escalation) return null;
+  // Staff Assignment State
+  const [counsellors, setCounsellors] = useState<CounsellorOption[]>([]);
+  const [selectedStaffId, setSelectedStaffId] = useState<number | 'unassigned'>(
+    initialEscalation?.assigned_to_user_id || 'unassigned'
+  );
+  const [isAssigning, setIsAssigning] = useState<boolean>(false);
+  const [assignmentFeedback, setAssignmentFeedback] = useState<string | null>(null);
+
+  // Priority Update State
+  const [isUpdatingPriority, setIsUpdatingPriority] = useState<boolean>(false);
+
+  // Synchronize initial escalation prop
+  useEffect(() => {
+    setEscalation(initialEscalation);
+    setSelectedStaffId(initialEscalation?.assigned_to_user_id || 'unassigned');
+  }, [initialEscalation]);
+
+  // Load available counsellors when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      adminEscalationService.getCounsellors()
+        .then(setCounsellors)
+        .catch((err) => console.warn('[EscalationDetailModal] Could not fetch counsellors:', err));
+    }
+  }, [isOpen]);
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '—';
@@ -49,6 +80,45 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
       return dateStr;
     }
   };
+
+  // Handle Counsellor Assignment / Reassignment / Unassignment
+  const handleAssignCounsellor = async () => {
+    if (!escalation) return;
+    setIsAssigning(true);
+    setAssignmentFeedback(null);
+    try {
+      const targetUserId = selectedStaffId === 'unassigned' ? null : Number(selectedStaffId);
+      const updated = await adminEscalationService.assignCounsellor(escalation.id, targetUserId);
+      setEscalation(updated);
+      setSelectedStaffId(updated.assigned_to_user_id || 'unassigned');
+      setAssignmentFeedback(
+        targetUserId ? `Assigned to ${updated.assigned_counsellor}.` : 'Case unassigned.'
+      );
+      if (onEscalationUpdated) onEscalationUpdated(updated);
+    } catch (err: any) {
+      console.error('[EscalationDetailModal] Assignment failed:', err);
+      setAssignmentFeedback(err?.message || 'Assignment failed.');
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  // Handle Escalation Priority Change (Normal, High, Urgent)
+  const handleUpdatePriority = async (newPriority: string) => {
+    if (!escalation) return;
+    setIsUpdatingPriority(true);
+    try {
+      const updated = await adminEscalationService.updatePriority(escalation.id, newPriority);
+      setEscalation(updated);
+      if (onEscalationUpdated) onEscalationUpdated(updated);
+    } catch (err: any) {
+      console.error('[EscalationDetailModal] Priority update failed:', err);
+    } finally {
+      setIsUpdatingPriority(false);
+    }
+  };
+
+  if (!isOpen || !escalation) return null;
 
   const normStatus = (escalation.status || 'pending').toLowerCase().replace('-', '_').replace(' ', '_');
 
@@ -209,47 +279,196 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Audit & Handling Information */}
-              <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                  <Shield className="h-4 w-4 text-accent" />
-                  <span>Administrative Audit & Resolution</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                  <div>
-                    <span className="text-text-muted block text-[11px]">Created At</span>
-                    <span className="text-text-secondary">{formatDate(escalation.created_at)}</span>
+              {/* Counsellor Assignment & Priority Controls */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Counsellor Assignment Workflow */}
+                <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+                      <UserCheck className="h-4 w-4 text-accent" />
+                      Assigned Counsellor
+                    </span>
+                    {assignmentFeedback && (
+                      <span className="text-[11px] text-emerald-400 font-medium">
+                        {assignmentFeedback}
+                      </span>
+                    )}
                   </div>
-                  <div>
-                    <span className="text-text-muted block text-[11px]">Started Handling</span>
-                    <span className="text-text-secondary">{formatDate(escalation.started_at)}</span>
+
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedStaffId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedStaffId(val === 'unassigned' ? 'unassigned' : Number(val));
+                        setAssignmentFeedback(null);
+                      }}
+                      disabled={isAssigning}
+                      className="flex-1 rounded-lg border border-border bg-surface-elevated/70 px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                    >
+                      <option value="unassigned">-- Unassigned --</option>
+                      {counsellors.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.role})
+                        </option>
+                      ))}
+                    </select>
+
+                    <Button
+                      size="sm"
+                      onClick={handleAssignCounsellor}
+                      disabled={isAssigning}
+                      className="bg-accent/20 hover:bg-accent/30 text-accent border border-accent/40 font-medium h-8 text-xs shrink-0"
+                    >
+                      {isAssigning ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : selectedStaffId === 'unassigned' ? (
+                        'Unassign'
+                      ) : escalation.assigned_to_user_id ? (
+                        'Reassign'
+                      ) : (
+                        'Assign'
+                      )}
+                    </Button>
                   </div>
-                  <div>
-                    <span className="text-text-muted block text-[11px]">Resolved At</span>
-                    <span className="text-text-secondary">{formatDate(escalation.resolved_at)}</span>
-                  </div>
-                  <div>
-                    <span className="text-text-muted block text-[11px]">Assigned Counsellor</span>
-                    <span className="text-text-secondary">{escalation.assigned_counsellor || 'Unassigned'}</span>
-                  </div>
-                  <div>
-                    <span className="text-text-muted block text-[11px]">Resolved By</span>
-                    <span className="text-text-secondary">{escalation.resolved_by || '—'}</span>
-                  </div>
-                  <div>
-                    <span className="text-text-muted block text-[11px]">Last Updated</span>
-                    <span className="text-text-secondary">{formatDate(escalation.updated_at)}</span>
-                  </div>
+                  <p className="text-[11px] text-text-muted">
+                    Current:{' '}
+                    <strong className="text-text-primary">
+                      {escalation.assigned_counsellor || 'Unassigned'}
+                    </strong>
+                  </p>
                 </div>
 
-                {escalation.resolution_notes && (
-                  <div className="pt-2 border-t border-border/60">
-                    <span className="text-[11px] font-medium text-text-muted block">Resolution Notes</span>
-                    <p className="text-xs text-text-secondary mt-1 bg-surface-elevated/50 p-2.5 rounded-lg border border-border/60">
-                      {escalation.resolution_notes}
+                {/* Priority Selection (Normal / High / Urgent) */}
+                <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-amber-400" />
+                      Escalation Priority
+                    </span>
+                    {isUpdatingPriority && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-text-muted" />
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {[
+                      { key: 'normal', label: 'Normal', color: 'text-text-secondary border-border hover:border-text-secondary' },
+                      { key: 'high', label: 'High', color: 'text-amber-400 border-amber-500/40 hover:bg-amber-500/10' },
+                      { key: 'urgent', label: 'Urgent', color: 'text-rose-400 border-rose-500/40 hover:bg-rose-500/10' },
+                    ].map((p) => {
+                      const curPri = (escalation.priority || 'medium').toLowerCase();
+                      const isActive =
+                        (p.key === 'normal' && (curPri === 'normal' || curPri === 'medium' || curPri === 'low')) ||
+                        curPri === p.key;
+
+                      return (
+                        <button
+                          key={p.key}
+                          type="button"
+                          onClick={() => handleUpdatePriority(p.key)}
+                          disabled={isUpdatingPriority}
+                          className={`flex-1 rounded-lg py-1.5 text-xs font-semibold border transition-all ${
+                            isActive
+                              ? p.key === 'urgent'
+                                ? 'bg-rose-500/20 text-rose-300 border-rose-500'
+                                : p.key === 'high'
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500'
+                                : 'bg-surface-elevated text-text-primary border-brand-500'
+                              : `bg-surface-elevated/40 text-text-muted border-border/80 ${p.color}`
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-text-muted">
+                    Manual triage priority benchmarked for counsellors.
+                  </p>
+                </div>
+              </div>
+
+              {/* Resolution Audit Trail (Created -> Assigned -> Status Changed -> Resolved) */}
+              <div className="bg-surface border border-border rounded-xl p-4 space-y-3.5">
+                <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  <History className="h-4 w-4 text-accent" />
+                  <span>Resolution Audit Trail & Chronology</span>
+                </div>
+
+                <div className="space-y-3 text-xs pl-2 border-l-2 border-border/70 ml-2">
+                  {/* Step 1: Created */}
+                  <div className="relative pl-4 space-y-0.5">
+                    <span className="absolute -left-[19px] top-1 h-3 w-3 rounded-full bg-brand-500 border-2 border-surface" />
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-text-primary">Created</span>
+                      <span className="text-[11px] font-mono text-text-muted">{formatDate(escalation.created_at)}</span>
+                    </div>
+                    <p className="text-[11px] text-text-secondary">
+                      Case flagged from {escalation.counselling_session_id ? `Counselling Session #${escalation.counselling_session_id}` : 'beneficiary resistance'}.
                     </p>
                   </div>
-                )}
+
+                  {/* Step 2: Assigned */}
+                  <div className="relative pl-4 space-y-0.5">
+                    <span className={`absolute -left-[19px] top-1 h-3 w-3 rounded-full border-2 border-surface ${
+                      escalation.assigned_counsellor ? 'bg-blue-500' : 'bg-surface-elevated border-text-muted'
+                    }`} />
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-text-primary">Assigned</span>
+                      <span className="text-[11px] font-mono text-text-muted">
+                        {escalation.assigned_counsellor ? formatDate(escalation.started_at || escalation.updated_at) : 'Pending'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-text-secondary">
+                      {escalation.assigned_counsellor
+                        ? `Assigned to ${escalation.assigned_counsellor}`
+                        : 'Unassigned (available for triage assignment)'}
+                    </p>
+                  </div>
+
+                  {/* Step 3: Status Changed */}
+                  <div className="relative pl-4 space-y-0.5">
+                    <span className={`absolute -left-[19px] top-1 h-3 w-3 rounded-full border-2 border-surface ${
+                      normStatus !== 'pending' ? 'bg-amber-500' : 'bg-surface-elevated border-text-muted'
+                    }`} />
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-text-primary">Status Changed</span>
+                      <span className="text-[11px] font-mono text-text-muted">
+                        {escalation.started_at ? formatDate(escalation.started_at) : formatDate(escalation.updated_at)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-text-secondary">
+                      Current lifecycle state: <strong className="capitalize text-text-primary">{escalation.status}</strong>
+                    </p>
+                  </div>
+
+                  {/* Step 4: Resolved */}
+                  <div className="relative pl-4 space-y-0.5">
+                    <span className={`absolute -left-[19px] top-1 h-3 w-3 rounded-full border-2 border-surface ${
+                      normStatus === 'resolved' ? 'bg-emerald-500' : 'bg-surface-elevated border-text-muted'
+                    }`} />
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-text-primary">Resolved</span>
+                      <span className="text-[11px] font-mono text-text-muted">
+                        {escalation.resolved_at ? formatDate(escalation.resolved_at) : 'Pending'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-text-secondary">
+                      {normStatus === 'resolved'
+                        ? `Resolved by ${escalation.resolved_by || 'Admin'}`
+                        : 'Awaiting counselling completion.'}
+                    </p>
+                    {escalation.resolution_notes && (
+                      <div className="mt-1.5 p-2 rounded-lg bg-surface-elevated/70 border border-border text-xs text-text-primary">
+                        <span className="font-medium text-text-muted block text-[10px] uppercase tracking-wider mb-0.5">
+                          Resolution Note
+                        </span>
+                        {escalation.resolution_notes}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </>
           ) : (

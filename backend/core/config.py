@@ -51,8 +51,8 @@ class Settings(BaseSettings):
 
         return cleaned
 
-    # Database Configuration (PostgreSQL with pgvector)
-    DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/sih_db"
+    # Database Configuration. Render supplies DATABASE_URL; SQLite remains the local default.
+    DATABASE_URL: str = "sqlite:///./sih.db"
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

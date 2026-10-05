@@ -159,3 +159,24 @@ export interface DataFilterParams {
   data_source_id?: number;
   region?: string;
 }
+
+export interface BulkActionResponse {
+  action: string;
+  total_requested: number;
+  successful: number;
+  failed: number;
+  errors: string[];
+}
+
+export interface ImportCsvResponse {
+  records_imported: number;
+  records_rejected: number;
+  validation_errors: string[];
+}
+
+export interface RagSyncResponse {
+  status: string;
+  message: string;
+  verified_records_synced: number;
+  synced_at: string;
+}

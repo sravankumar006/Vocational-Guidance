@@ -298,6 +298,37 @@ class DataSourceResponse(DataSourceBase):
     verified_at: Optional[datetime] = None
     verified_by: Optional[int] = None
     created_at: datetime
-    updated_at: datetime
-
     model_config = ConfigDict(from_attributes=True)
+
+
+# -----------------------------------------------------------------------------
+# 7. Bulk Action, CSV Import/Export & RAG Sync Schemas
+# -----------------------------------------------------------------------------
+class BulkActionRequest(BaseModel):
+    action: str = Field(..., description="Action to perform: 'verify' or 'deactivate'")
+    ids: List[int] = Field(..., min_length=1, description="List of record IDs")
+
+
+class BulkActionResponse(BaseModel):
+    action: str
+    total_requested: int
+    successful: int
+    failed: int
+    errors: List[str] = Field(default_factory=list)
+
+
+class ImportCsvRequest(BaseModel):
+    csv_text: str = Field(..., min_length=1, description="Raw CSV text content to parse and import")
+
+
+class ImportCsvResponse(BaseModel):
+    records_imported: int
+    records_rejected: int
+    validation_errors: List[str] = Field(default_factory=list)
+
+
+class RagSyncResponse(BaseModel):
+    status: str
+    message: str
+    verified_records_synced: int
+    synced_at: datetime

@@ -96,3 +96,10 @@ export interface EscalationStatusUpdateRequest {
   resolution_notes?: string;
   assigned_to_user_id?: number;
 }
+
+export interface CounsellorOption {
+  id: number;
+  name: string;
+  email?: string | null;
+  role: string;
+}

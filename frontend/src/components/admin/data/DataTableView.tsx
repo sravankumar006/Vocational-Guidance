@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { DataTabKey } from '@/types/adminData';
 import { DataStatusBadge } from './DataStatusBadge';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +11,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  CheckSquare,
+  Loader2,
+  X,
 } from 'lucide-react';
 
 interface DataTableViewProps {
@@ -26,6 +29,7 @@ interface DataTableViewProps {
   onVerify: (item: any) => void;
   onDeactivate: (item: any) => void;
   onReactivate: (item: any) => void;
+  onBulkAction?: (action: 'verify' | 'deactivate', ids: number[]) => Promise<void>;
 }
 
 export const DataTableView: React.FC<DataTableViewProps> = ({
@@ -41,7 +45,18 @@ export const DataTableView: React.FC<DataTableViewProps> = ({
   onVerify,
   onDeactivate,
   onReactivate,
+  onBulkAction,
 }) => {
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkConfirmAction, setBulkConfirmAction] = useState<'verify' | 'deactivate' | null>(null);
+  const [isBulkExecuting, setIsBulkExecuting] = useState<boolean>(false);
+
+  // Clear selections when tab or page changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setBulkConfirmAction(null);
+  }, [tab, page]);
+
   if (items.length === 0) {
     return (
       <div className="py-12 text-center rounded-xl border border-border/60 bg-surface/50 p-8 space-y-2">
@@ -54,13 +69,104 @@ export const DataTableView: React.FC<DataTableViewProps> = ({
   const startIdx = (page - 1) * pageSize + 1;
   const endIdx = Math.min(page * pageSize, total);
 
+  const currentPageIds = items.map((it) => it.id);
+  const isAllSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedIds.has(id));
+  const isSomeSelected = currentPageIds.some((id) => selectedIds.has(id));
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      const next = new Set(selectedIds);
+      currentPageIds.forEach((id) => next.delete(id));
+      setSelectedIds(next);
+    } else {
+      const next = new Set(selectedIds);
+      currentPageIds.forEach((id) => next.add(id));
+      setSelectedIds(next);
+    }
+  };
+
+  const toggleSelectOne = (id: number) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const handleExecuteBulkAction = async () => {
+    if (!bulkConfirmAction || !onBulkAction || selectedIds.size === 0) return;
+    setIsBulkExecuting(true);
+    try {
+      await onBulkAction(bulkConfirmAction, Array.from(selectedIds));
+      setSelectedIds(new Set());
+      setBulkConfirmAction(null);
+    } finally {
+      setIsBulkExecuting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Bulk Selection Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-brand-500/10 border border-brand-500/30 rounded-xl text-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="h-4 w-4 text-brand-400" />
+            <span className="font-semibold text-text-primary">
+              Selected <span className="font-mono text-brand-400 font-bold">{selectedIds.size}</span> of {items.length} records on this page
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => setBulkConfirmAction('verify')}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium gap-1.5 h-8 text-xs"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span>Bulk Verify</span>
+            </Button>
+
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setBulkConfirmAction('deactivate')}
+              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-medium gap-1.5 h-8 text-xs"
+            >
+              <EyeOff className="h-3.5 w-3.5" />
+              <span>Bulk Deactivate</span>
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-text-muted hover:text-text-primary px-2 py-1"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table Container */}
       <div className="overflow-x-auto rounded-xl border border-border/80 bg-surface shadow-sm">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="border-b border-border/60 bg-surface-elevated/70 text-text-muted uppercase font-mono text-[10px] tracking-wider">
+              <th className="w-10 py-3 px-3 text-center">
+                <input
+                  type="checkbox"
+                  checked={isAllSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = isSomeSelected && !isAllSelected;
+                  }}
+                  onChange={toggleSelectAll}
+                  aria-label="Select all records on current page"
+                  className="rounded border-border text-brand-500 focus:ring-brand-500/20 bg-surface-elevated cursor-pointer h-3.5 w-3.5"
+                />
+              </th>
               {tab === 'courses' && (
                 <>
                   <th className="py-3 px-4 font-semibold">Course Title</th>
@@ -136,8 +242,19 @@ export const DataTableView: React.FC<DataTableViewProps> = ({
             {items.map((row) => (
               <tr
                 key={row.id}
-                className="hover:bg-surface-elevated/40 transition-colors group"
+                className={`hover:bg-surface-elevated/40 transition-colors group ${
+                  selectedIds.has(row.id) ? 'bg-brand-500/[0.04]' : ''
+                }`}
               >
+                <td className="w-10 py-3 px-3 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(row.id)}
+                    onChange={() => toggleSelectOne(row.id)}
+                    aria-label={`Select ${row.name || `record ${row.id}`}`}
+                    className="rounded border-border text-brand-500 focus:ring-brand-500/20 bg-surface-elevated cursor-pointer h-3.5 w-3.5"
+                  />
+                </td>
                 {/* 1. COURSES ROW */}
                 {tab === 'courses' && (
                   <>
@@ -382,6 +499,94 @@ export const DataTableView: React.FC<DataTableViewProps> = ({
           </Button>
         </div>
       </div>
+
+      {/* Bulk Confirmation Modal */}
+      {bulkConfirmAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-surface-card border border-border rounded-xl shadow-2xl max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-bold text-text-primary">
+                {bulkConfirmAction === 'verify' ? (
+                  <>
+                    <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                    <span>Confirm Bulk Verification</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="h-5 w-5 text-rose-400" />
+                    <span>Confirm Bulk Deactivation</span>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setBulkConfirmAction(null)}
+                className="text-text-muted hover:text-text-primary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {bulkConfirmAction === 'verify' ? (
+              <div className="space-y-3 text-xs text-text-secondary leading-relaxed">
+                <p className="font-semibold text-text-primary">
+                  You are about to verify {selectedIds.size} records.
+                </p>
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-lg text-emerald-300">
+                  Verified records may become eligible for authoritative RAG retrieval.
+                </div>
+                <p>
+                  Please confirm that these records have been reviewed.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs text-text-secondary leading-relaxed">
+                <p className="font-semibold text-text-primary">
+                  You are about to deactivate {selectedIds.size} records.
+                </p>
+                <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-lg text-rose-300">
+                  Deactivated records will be excluded from search and RAG knowledge base retrieval.
+                </div>
+                <p>
+                  Please confirm that you want to deactivate these records.
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setBulkConfirmAction(null)}
+                disabled={isBulkExecuting}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleExecuteBulkAction}
+                disabled={isBulkExecuting}
+                className={
+                  bulkConfirmAction === 'verify'
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white font-medium'
+                    : 'bg-rose-600 hover:bg-rose-500 text-white font-medium'
+                }
+              >
+                {isBulkExecuting ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                    <span>Processing...</span>
+                  </>
+                ) : bulkConfirmAction === 'verify' ? (
+                  'Confirm Verification'
+                ) : (
+                  'Confirm Deactivation'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

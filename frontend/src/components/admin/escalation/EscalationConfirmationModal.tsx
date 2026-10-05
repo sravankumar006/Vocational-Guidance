@@ -115,7 +115,7 @@ export const EscalationConfirmationModal: React.FC<EscalationConfirmationModalPr
               <textarea
                 value={resolutionNotes}
                 onChange={(e) => setResolutionNotes(e.target.value)}
-                placeholder="Briefly document the guidance provided or outcome reached..."
+                placeholder="Parent's concerns regarding income and career progression were addressed..."
                 rows={3}
                 disabled={isSubmitting}
                 className="w-full px-3 py-2 text-xs rounded-lg bg-surface border border-border text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:border-accent resize-none"

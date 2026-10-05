@@ -1,7 +1,7 @@
 import React from 'react';
 import type { DataTabKey, DataOptionsResponse } from '@/types/adminData';
 import { Button } from '@/components/ui/Button';
-import { Search, Plus, Filter, RotateCcw } from 'lucide-react';
+import { Search, Plus, Filter, RotateCcw, Download, Upload } from 'lucide-react';
 
 interface DataTabHeaderProps {
   tab: DataTabKey;
@@ -14,6 +14,8 @@ interface DataTabHeaderProps {
   onSectorChange?: (sector: string) => void;
   onReset: () => void;
   onAddClick: () => void;
+  onExportCsv?: () => void;
+  onImportCsvClick?: () => void;
   isLoading: boolean;
 }
 
@@ -28,6 +30,8 @@ export const DataTabHeader: React.FC<DataTabHeaderProps> = ({
   onSectorChange,
   onReset,
   onAddClick,
+  onExportCsv,
+  onImportCsvClick,
   isLoading,
 }) => {
   const getSearchPlaceholder = () => {
@@ -67,15 +71,43 @@ export const DataTabHeader: React.FC<DataTabHeaderProps> = ({
           />
         </div>
 
-        {/* Action Button */}
-        <Button
-          size="sm"
-          onClick={onAddClick}
-          className="bg-brand-600 hover:bg-brand-500 text-white font-medium gap-1.5 shrink-0"
-        >
-          <Plus className="h-4 w-4" />
-          <span>{getAddLabel()}</span>
-        </Button>
+        {/* Action Buttons Group */}
+        <div className="flex items-center gap-2 shrink-0">
+          {onExportCsv && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onExportCsv}
+              className="text-text-secondary hover:text-text-primary border border-border bg-surface-elevated/50 font-medium gap-1.5"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Export CSV</span>
+            </Button>
+          )}
+
+          {onImportCsvClick && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onImportCsvClick}
+              className="text-text-secondary hover:text-text-primary border border-border bg-surface-elevated/50 font-medium gap-1.5"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              <span>Import CSV</span>
+            </Button>
+          )}
+
+          <Button
+            size="sm"
+            onClick={onAddClick}
+            className="bg-brand-600 hover:bg-brand-500 text-white font-medium gap-1.5 shrink-0"
+          >
+            <Plus className="h-4 w-4" />
+            <span>{getAddLabel()}</span>
+          </Button>
+        </div>
       </div>
 
       {/* Filter Row */}

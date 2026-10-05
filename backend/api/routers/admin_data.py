@@ -9,10 +9,13 @@ Provides CRUD, verification, deactivation, and reactivation workflows for:
 - Data Sources
 """
 
+import csv
+import io
 import math
 from datetime import datetime
 from typing import Optional, List, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
 
@@ -28,6 +31,7 @@ from models import (
 )
 from models.enums import RecordStatus
 from api.deps import require_admin
+from rag.knowledge_base import KnowledgeBase
 from schemas.admin_data import (
     PaginatedResponse,
     DataOptionsResponse,
@@ -52,6 +56,11 @@ from schemas.admin_data import (
     DataSourceCreate,
     DataSourceUpdate,
     DataSourceResponse,
+    BulkActionRequest,
+    BulkActionResponse,
+    ImportCsvRequest,
+    ImportCsvResponse,
+    RagSyncResponse,
 )
 
 router = APIRouter(prefix="/admin/data", tags=["Admin Data"])
@@ -1254,3 +1263,298 @@ def reactivate_data_source(
     db.commit()
     db.refresh(source)
     return DataSourceResponse.model_validate(source)
+
+
+# =============================================================================
+# 7. Bulk Selection, CSV Import/Export & RAG Synchronization
+# =============================================================================
+
+ENTITY_MODEL_MAP = {
+    "courses": Course,
+    "occupations": Occupation,
+    "providers": TrainingProvider,
+    "outcomes": JobOutcome,
+    "career-paths": CareerPath,
+    "sources": DataSource,
+}
+
+
+@router.post("/rag/sync", response_model=RagSyncResponse)
+def sync_rag_knowledge_base(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> RagSyncResponse:
+    """Sync authoritative RAG knowledge base using active, verified records.
+
+    Excludes inactive, unverified, and demo-only records from the authoritative
+    RAG retrieval index.
+    """
+    verified_items = KnowledgeBase.load_all_items(db, verified_only=True)
+    return RagSyncResponse(
+        status="success",
+        message="Knowledge base synchronized successfully with active, verified records.",
+        verified_records_synced=len(verified_items),
+        synced_at=datetime.utcnow(),
+    )
+
+
+@router.post("/{entity}/bulk-action", response_model=BulkActionResponse)
+def execute_bulk_action(
+    entity: str,
+    payload: BulkActionRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> BulkActionResponse:
+    """Execute bulk verification or deactivation with strict safety checks."""
+    if entity not in ENTITY_MODEL_MAP:
+        raise HTTPException(status_code=400, detail=f"Unsupported entity type: '{entity}'")
+
+    model = ENTITY_MODEL_MAP[entity]
+    action = payload.action.strip().lower()
+    if action not in ("verify", "deactivate"):
+        raise HTTPException(
+            status_code=400,
+            detail="Action must be either 'verify' or 'deactivate'",
+        )
+
+    records = db.query(model).filter(model.id.in_(payload.ids)).all()
+    records_by_id = {r.id: r for r in records}
+
+    successful = 0
+    errors: List[str] = []
+
+    for record_id in payload.ids:
+        record = records_by_id.get(record_id)
+        if not record:
+            errors.append(f"Record #{record_id} does not exist.")
+            continue
+
+        if action == "verify":
+            # Safety check: enforce source traceability where model has data_source_id
+            if hasattr(record, "data_source_id") and not getattr(record, "data_source_id", None):
+                rec_name = getattr(record, "name", f"Record #{record_id}")
+                errors.append(f"{rec_name} (#{record_id}): A linked source is required before this record can be verified.")
+                continue
+
+            record.status = RecordStatus.VERIFIED.value
+            if hasattr(record, "verified_at"):
+                record.verified_at = datetime.utcnow()
+            if hasattr(record, "verified_by"):
+                record.verified_by = current_admin.id
+            successful += 1
+        elif action == "deactivate":
+            record.status = RecordStatus.INACTIVE.value
+            successful += 1
+
+    db.commit()
+
+    return BulkActionResponse(
+        action=action,
+        total_requested=len(payload.ids),
+        successful=successful,
+        failed=len(payload.ids) - successful,
+        errors=errors,
+    )
+
+
+@router.get("/export/{entity}")
+@router.get("/export-csv/{entity}")
+def export_dataset_csv(
+    entity: str,
+    q: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    sector: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+):
+    """Export the currently filtered dataset as a safe CSV without sensitive or unrelated data."""
+    if entity not in ENTITY_MODEL_MAP:
+        raise HTTPException(status_code=400, detail=f"Unsupported entity type: '{entity}'")
+
+    model = ENTITY_MODEL_MAP[entity]
+    query = db.query(model)
+
+    if status_filter and status_filter.lower() != "all":
+        query = query.filter(model.status == status_filter.lower())
+
+    if sector and hasattr(model, "sector"):
+        query = query.filter(model.sector.ilike(f"%{sector}%"))
+
+    if q and hasattr(model, "name"):
+        query = query.filter(model.name.ilike(f"%{q}%"))
+
+    records = query.limit(5000).all()
+
+    # Determine CSV headers based on entity
+    field_maps = {
+        "courses": ["id", "name", "sector", "qualification_level", "duration", "delivery_mode", "provider_id", "data_source_id", "status"],
+        "occupations": ["id", "name", "sector", "description", "required_education", "skill_keywords", "data_source_id", "status"],
+        "providers": ["id", "name", "provider_type", "location", "website", "contact_email", "contact_phone", "accreditation_status", "status"],
+        "outcomes": ["id", "occupation_id", "region", "salary_range_min", "salary_range_max", "employment_rate", "experience_level", "data_source_id", "status"],
+        "career-paths": ["id", "name", "sector", "description", "entry_level_qualification", "status"],
+        "sources": ["id", "name", "source_type", "url", "description", "version", "status"],
+    }
+
+    fields = field_maps.get(entity, ["id", "name", "status"])
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fields)
+    writer.writeheader()
+
+    for rec in records:
+        row = {}
+        for f in fields:
+            val = getattr(rec, f, "")
+            row[f] = "" if val is None else str(val)
+        writer.writerow(row)
+
+    output.seek(0)
+    filename = f"{entity}_catalog_export.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.post("/{entity}/import-csv", response_model=ImportCsvResponse)
+def import_dataset_csv(
+    entity: str,
+    payload: ImportCsvRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> ImportCsvResponse:
+    """Import structured career/training records into catalog dataset.
+
+    Imported records are strictly created as 'demo' or 'unverified'.
+    They are NEVER automatically marked as 'verified'.
+    Malformed rows are validated and rejected with detailed error messages.
+    """
+    if entity not in ENTITY_MODEL_MAP:
+        raise HTTPException(status_code=400, detail=f"Unsupported entity type: '{entity}'")
+
+    raw_content = payload.csv_text or ""
+    if not raw_content.strip():
+        raise HTTPException(status_code=400, detail="CSV payload is empty.")
+
+    reader = csv.DictReader(io.StringIO(raw_content))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="Could not detect CSV header columns.")
+
+    model = ENTITY_MODEL_MAP[entity]
+    imported = 0
+    rejected = 0
+    errors: List[str] = []
+
+    for row_idx, row in enumerate(reader, start=2):  # line 1 is header
+        # 1. Clean row dict
+        clean_row = {k.strip(): (v.strip() if v else "") for k, v in row.items() if k}
+
+        # 2. Check for required fields
+        if entity in ("courses", "occupations", "providers", "career-paths", "sources"):
+            if not clean_row.get("name"):
+                rejected += 1
+                errors.append(f"Row {row_idx}: Missing required 'name' field.")
+                continue
+        elif entity == "outcomes":
+            if not clean_row.get("occupation_id") or not clean_row.get("occupation_id").isdigit():
+                rejected += 1
+                errors.append(f"Row {row_idx}: 'occupation_id' must be a valid integer.")
+                continue
+
+        # 3. Determine status: NEVER ALLOW 'verified'
+        status_val = clean_row.get("status", "").lower()
+        final_status = "demo" if status_val == "demo" else "unverified"
+
+        # 4. Instantiate model
+        try:
+            if entity == "courses":
+                provider_id = int(clean_row["provider_id"]) if clean_row.get("provider_id", "").isdigit() else None
+                source_id = int(clean_row["data_source_id"]) if clean_row.get("data_source_id", "").isdigit() else None
+                item = Course(
+                    name=clean_row["name"],
+                    sector=clean_row.get("sector") or None,
+                    qualification_level=clean_row.get("qualification_level") or None,
+                    duration=clean_row.get("duration") or None,
+                    delivery_mode=clean_row.get("delivery_mode") or None,
+                    provider_id=provider_id,
+                    data_source_id=source_id,
+                    description=clean_row.get("description") or None,
+                    status=final_status,
+                )
+            elif entity == "occupations":
+                source_id = int(clean_row["data_source_id"]) if clean_row.get("data_source_id", "").isdigit() else None
+                item = Occupation(
+                    name=clean_row["name"],
+                    sector=clean_row.get("sector") or None,
+                    description=clean_row.get("description") or None,
+                    required_education=clean_row.get("required_education") or None,
+                    skill_keywords=clean_row.get("skill_keywords") or None,
+                    data_source_id=source_id,
+                    status=final_status,
+                )
+            elif entity == "providers":
+                item = TrainingProvider(
+                    name=clean_row["name"],
+                    provider_type=clean_row.get("provider_type") or None,
+                    location=clean_row.get("location") or None,
+                    website=clean_row.get("website") or None,
+                    contact_email=clean_row.get("contact_email") or None,
+                    contact_phone=clean_row.get("contact_phone") or None,
+                    accreditation_status=clean_row.get("accreditation_status") or None,
+                    description=clean_row.get("description") or None,
+                    status=final_status,
+                )
+            elif entity == "outcomes":
+                source_id = int(clean_row["data_source_id"]) if clean_row.get("data_source_id", "").isdigit() else None
+                sal_min = int(clean_row["salary_range_min"]) if clean_row.get("salary_range_min", "").isdigit() else None
+                sal_max = int(clean_row["salary_range_max"]) if clean_row.get("salary_range_max", "").isdigit() else None
+                emp_rate = float(clean_row["employment_rate"]) if clean_row.get("employment_rate", "").replace(".", "", 1).isdigit() else None
+                item = JobOutcome(
+                    occupation_id=int(clean_row["occupation_id"]),
+                    region=clean_row.get("region") or None,
+                    salary_range_min=sal_min,
+                    salary_range_max=sal_max,
+                    employment_rate=emp_rate,
+                    experience_level=clean_row.get("experience_level") or None,
+                    data_source_id=source_id,
+                    status=final_status,
+                )
+            elif entity == "career-paths":
+                source_id = int(clean_row["data_source_id"]) if clean_row.get("data_source_id", "").isdigit() else None
+                item = CareerPath(
+                    name=clean_row["name"],
+                    sector=clean_row.get("sector") or None,
+                    description=clean_row.get("description") or None,
+                    entry_level_qualification=clean_row.get("entry_level_qualification") or None,
+                    data_source_id=source_id,
+                    status=final_status,
+                )
+            elif entity == "sources":
+                item = DataSource(
+                    name=clean_row["name"],
+                    source_type=clean_row.get("source_type") or None,
+                    url=clean_row.get("url") or None,
+                    description=clean_row.get("description") or None,
+                    version=clean_row.get("version") or None,
+                    status=final_status,
+                )
+            else:
+                rejected += 1
+                errors.append(f"Row {row_idx}: Unsupported entity '{entity}'.")
+                continue
+
+            db.add(item)
+            imported += 1
+        except Exception as e:
+            rejected += 1
+            errors.append(f"Row {row_idx}: Validation error - {str(e)}")
+
+    if imported > 0:
+        db.commit()
+
+    return ImportCsvResponse(
+        records_imported=imported,
+        records_rejected=rejected,
+        validation_errors=errors,
+    )

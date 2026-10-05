@@ -10,12 +10,16 @@ import type {
   DataStatsResponse,
   DataOptionsResponse,
   DataFilterParams,
+  DataTabKey,
   CourseRecord,
   OccupationRecord,
   TrainingProviderRecord,
   JobOutcomeRecord,
   CareerPathRecord,
   DataSourceRecord,
+  BulkActionResponse,
+  ImportCsvResponse,
+  RagSyncResponse,
 } from '@/types/adminData';
 
 function buildQuery(params?: DataFilterParams): string {
@@ -303,6 +307,42 @@ export const adminDataService = {
   async reactivateSource(id: number): Promise<DataSourceRecord> {
     return await apiClient<DataSourceRecord>(`/api/admin/data/sources/${id}/reactivate`, {
       method: 'PATCH',
+    });
+  },
+
+  // --------------------------------------------------------------------------
+  // Bulk Actions, CSV Import/Export & RAG Sync
+  // --------------------------------------------------------------------------
+  async executeBulkAction(
+    entity: DataTabKey,
+    action: 'verify' | 'deactivate',
+    ids: number[]
+  ): Promise<BulkActionResponse> {
+    return await apiClient<BulkActionResponse>(`/api/admin/data/${entity}/bulk-action`, {
+      method: 'POST',
+      body: JSON.stringify({ action, ids }),
+    });
+  },
+
+  async importCsv(entity: DataTabKey, csvText: string): Promise<ImportCsvResponse> {
+    return await apiClient<ImportCsvResponse>(`/api/admin/data/${entity}/import-csv`, {
+      method: 'POST',
+      body: JSON.stringify({ csv_text: csvText }),
+    });
+  },
+
+  getExportCsvUrl(entity: DataTabKey, params?: DataFilterParams): string {
+    const searchParams = new URLSearchParams();
+    if (params?.q) searchParams.append('q', params.q);
+    if (params?.status && params.status !== 'all') searchParams.append('status', params.status);
+    if (params?.sector) searchParams.append('sector', params.sector);
+    const qs = searchParams.toString();
+    return `/api/admin/data/export/${entity}${qs ? `?${qs}` : ''}`;
+  },
+
+  async syncRagKnowledgeBase(): Promise<RagSyncResponse> {
+    return await apiClient<RagSyncResponse>('/api/admin/data/rag/sync', {
+      method: 'POST',
     });
   },
 };

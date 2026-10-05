@@ -45,6 +45,28 @@ uvicorn main:app --reload
 API Documentation: `http://localhost:8000/api/docs`  
 Health Check: `http://localhost:8000/api/health`
 
+### Render PostgreSQL Deployment
+
+Set Render's PostgreSQL connection in the backend service environment as `DATABASE_URL`. Do not commit the value. Also set a strong `AUTH_SECRET_KEY`; `CORS_ORIGINS` may be set to the Vercel URL as a comma-separated value if it differs from the default.
+
+Use these Render service commands from the repository root:
+
+```bash
+# Build Command
+pip install -r backend/requirements.txt
+
+# Start Command
+cd backend && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+After the service is deployed and `DATABASE_URL` is available, run the existing idempotent dataset importer once from the repository root (for example, in a Render shell):
+
+```bash
+python backend/scripts/import_dataset.py --csv-path backend/data/raw/database.csv
+```
+
+The importer reads `backend/data/raw/database.csv`, preserves existing records, and commits the career, course, provider, occupation, career-path, and job-outcome data in one transaction. Run `alembic upgrade head` before importing; the importer intentionally does not create schema. Local development continues to use `sqlite:///./sih.db` when `DATABASE_URL` is not set.
+
 ---
 
 ## Git Collaboration Guidelines

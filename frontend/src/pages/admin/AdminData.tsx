@@ -13,6 +13,7 @@ import { DataTableView } from '@/components/admin/data/DataTableView';
 import { DataDetailModal } from '@/components/admin/data/DataDetailModal';
 import { DataFormModal } from '@/components/admin/data/DataFormModal';
 import { DataConfirmationModal } from '@/components/admin/data/DataConfirmationModal';
+import { ImportCsvModal } from '@/components/admin/data/ImportCsvModal';
 
 // Shared UI Components
 import { Button } from '@/components/ui/Button';
@@ -33,6 +34,8 @@ import {
   EyeOff,
   AlertCircle,
   FileCheck2,
+  Loader2,
+  X,
 } from 'lucide-react';
 
 export const AdminData: React.FC = () => {
@@ -60,6 +63,11 @@ export const AdminData: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [formInitialData, setFormInitialData] = useState<any | null>(null);
   const [isFormSubmitting, setIsFormSubmitting] = useState<boolean>(false);
+
+  // CSV Import & RAG Sync States
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [isRagSyncConfirmOpen, setIsRagSyncConfirmOpen] = useState<boolean>(false);
+  const [isRagSyncing, setIsRagSyncing] = useState<boolean>(false);
 
   // Confirmation Modal State (Verify / Deactivate / Reactivate)
   const [confirmAction, setConfirmAction] = useState<'verify' | 'deactivate' | 'reactivate' | null>(null);
@@ -297,6 +305,66 @@ export const AdminData: React.FC = () => {
     }
   };
 
+  // Bulk Action Execution Handler
+  const handleBulkAction = async (action: 'verify' | 'deactivate', ids: number[]) => {
+    setFeedback(null);
+    try {
+      const res = await adminDataService.executeBulkAction(activeTab, action, ids);
+      if (res.errors.length > 0) {
+        setFeedback({
+          type: 'error',
+          message: `Processed ${res.successful} records. ${res.failed} records could not be updated: ${res.errors[0]}`,
+        });
+      } else {
+        setFeedback({
+          type: 'success',
+          message: `Successfully executed bulk ${action} on ${res.successful} records.`,
+        });
+      }
+      fetchTabRecords(activeTab, page, searchQuery, statusFilter, sectorFilter, true);
+      fetchGlobalMetadata();
+    } catch (err: any) {
+      console.error('[AdminData] Bulk action failed:', err);
+      setFeedback({
+        type: 'error',
+        message: err?.message || `Bulk ${action} operation failed.`,
+      });
+    }
+  };
+
+  // Export Filtered CSV Handler
+  const handleExportCsv = () => {
+    const url = adminDataService.getExportCsvUrl(activeTab, {
+      q: searchQuery,
+      status: statusFilter,
+      sector: sectorFilter,
+    });
+    window.open(url, '_blank');
+  };
+
+  // RAG Knowledge Base Sync Handler
+  const handleSyncRag = async () => {
+    setIsRagSyncing(true);
+    setFeedback(null);
+    try {
+      const res = await adminDataService.syncRagKnowledgeBase();
+      setFeedback({
+        type: 'success',
+        message: `Knowledge base synchronized successfully: ${res.verified_records_synced} active, verified records indexed for authoritative RAG retrieval.`,
+      });
+      setIsRagSyncConfirmOpen(false);
+    } catch (err: any) {
+      console.error('[AdminData] RAG sync failed:', err);
+      setFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to sync RAG knowledge base.',
+      });
+      setIsRagSyncConfirmOpen(false);
+    } finally {
+      setIsRagSyncing(false);
+    }
+  };
+
   // Helper for tab counts
   const getTabCount = (tabKey: DataTabKey): number => {
     if (!stats) return 0;
@@ -366,6 +434,21 @@ export const AdminData: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsRagSyncConfirmOpen(true)}
+            disabled={isLoading || isRefreshing || isRagSyncing}
+            className="gap-2 border-brand-500/40 text-brand-300 hover:text-brand-200 bg-brand-500/10 hover:bg-brand-500/20 font-medium"
+          >
+            {isRagSyncing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ShieldCheck className="h-3.5 w-3.5 text-brand-400" />
+            )}
+            <span>Sync RAG Knowledge Base</span>
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -535,6 +618,8 @@ export const AdminData: React.FC = () => {
         }}
         onReset={handleResetFilters}
         onAddClick={handleAdd}
+        onExportCsv={handleExportCsv}
+        onImportCsvClick={() => setIsImportModalOpen(true)}
         isLoading={isLoading || isRefreshing}
       />
 
@@ -571,6 +656,7 @@ export const AdminData: React.FC = () => {
           onVerify={handleVerifyClick}
           onDeactivate={handleDeactivateClick}
           onReactivate={handleReactivateClick}
+          onBulkAction={handleBulkAction}
         />
       )}
 
@@ -597,6 +683,17 @@ export const AdminData: React.FC = () => {
         onClose={() => setIsFormOpen(false)}
       />
 
+      {/* CSV Import Modal */}
+      <ImportCsvModal
+        isOpen={isImportModalOpen}
+        activeTab={activeTab}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportSuccess={() => {
+          fetchTabRecords(activeTab, page, searchQuery, statusFilter, sectorFilter, true);
+          fetchGlobalMetadata();
+        }}
+      />
+
       {/* Confirmation Modal (Verify / Deactivate / Reactivate) */}
       <DataConfirmationModal
         isOpen={Boolean(confirmAction)}
@@ -611,6 +708,65 @@ export const AdminData: React.FC = () => {
           setConfirmTarget(null);
         }}
       />
+
+      {/* RAG Knowledge Base Sync Confirmation Modal */}
+      {isRagSyncConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-surface-card border border-border rounded-xl shadow-2xl max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-bold text-text-primary">
+                <ShieldCheck className="h-5 w-5 text-brand-400" />
+                <span>Sync RAG Knowledge Base</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRagSyncConfirmOpen(false)}
+                className="text-text-muted hover:text-text-primary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-text-secondary leading-relaxed">
+              <p className="font-semibold text-text-primary">
+                This will update the knowledge base using active, verified records.
+              </p>
+              <div className="p-3 bg-brand-500/10 border border-brand-500/25 rounded-lg text-brand-300">
+                Inactive, unverified, and demo-only records continue to be strictly excluded from authoritative RAG retrieval.
+              </div>
+              <p>
+                Continue?
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsRagSyncConfirmOpen(false)}
+                disabled={isRagSyncing}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSyncRag}
+                disabled={isRagSyncing}
+                className="bg-brand-600 hover:bg-brand-500 text-white font-medium"
+              >
+                {isRagSyncing ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                    <span>Synchronizing...</span>
+                  </>
+                ) : (
+                  'Continue'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -39,6 +39,7 @@ export const AIPerformanceTrend: React.FC<AIPerformanceTrendProps> = ({ trend })
       'Resolved Automatically': p.resolved,
       'Escalated to Human': p.escalated,
       'Low Confidence': p.low_confidence,
+      'Unanswered Inquiries': p.unanswered ?? p.escalated,
     };
   });
 
@@ -123,6 +124,14 @@ export const AIPerformanceTrend: React.FC<AIPerformanceTrendProps> = ({ trend })
               stroke="#a855f7"
               strokeWidth={1.5}
               strokeDasharray="4 4"
+              dot={{ r: 2 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="Unanswered Inquiries"
+              stroke="#ec4899"
+              strokeWidth={1.5}
+              strokeDasharray="2 2"
               dot={{ r: 2 }}
             />
           </LineChart>

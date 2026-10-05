@@ -53,11 +53,17 @@ export const AIUnansweredQuestionsSection: React.FC<AIUnansweredQuestionsSection
         </div>
       </div>
 
-      {/* Structured Category Breakdown (Privacy Preserving - No Private Conversation Contents) */}
-      <div className="mt-4 border-t border-border/30 pt-3">
-        <div className="mb-2 text-xs font-medium text-text-secondary">
-          Common Inquiry Topics Triggering Escalation:
+      {/* Structured Category Breakdown */}
+      <div className="mt-4 border-t border-border/30 pt-3 space-y-3">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-semibold text-text-secondary uppercase tracking-wider">
+            Inquiry Concern Domains
+          </span>
+          <span className="text-[11px] text-text-muted">
+            Derived from Associated Parent Concerns
+          </span>
         </div>
+
         {categories.length === 0 ? (
           <div className="py-2 text-xs text-text-muted italic">
             No specific topic clusters logged for unanswered inquiries in this period.
@@ -75,6 +81,16 @@ export const AIUnansweredQuestionsSection: React.FC<AIUnansweredQuestionsSection
             ))}
           </div>
         )}
+
+        {/* Structural Diagnostic Breakdown */}
+        <div className="rounded-lg border border-dashed border-border/80 bg-surface-elevated/30 p-3 text-xs text-text-muted space-y-1">
+          <div className="font-medium text-text-secondary">
+            Diagnostic Classification: Categorization unavailable with current telemetry
+          </div>
+          <p className="text-[11px] leading-relaxed text-text-muted">
+            Structural categorization (<em>No Verified Evidence</em>, <em>Unsupported Topic</em>, <em>AI Failure</em>, <em>Human Escalation</em>) is scheduled for future telemetry enhancements. The platform currently tracks associated parent concern categories without fabricating speculative classifications.
+          </p>
+        </div>
       </div>
     </div>
   );

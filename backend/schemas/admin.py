@@ -343,6 +343,10 @@ class GeographicLocationItem(BaseModel):
     location: str = Field(..., description="State, District, or Region name")
     count: int = Field(default=0)
     percentage: float = Field(default=0.0)
+    sessions: int = Field(default=0, description="Total counselling sessions")
+    concerns: int = Field(default=0, description="Total parent concerns recorded")
+    escalations: int = Field(default=0, description="Total human counsellor escalations")
+    ai_resolution_rate: float = Field(default=0.0, description="Percentage of AI-resolved inquiries (0-100)")
 
 
 class GeographicTrendPoint(BaseModel):
@@ -413,6 +417,7 @@ class AIPerformanceTrendPoint(BaseModel):
     resolved: int = Field(default=0)
     escalated: int = Field(default=0)
     low_confidence: int = Field(default=0)
+    unanswered: int = Field(default=0)
 
 
 class AIUnansweredCategoryItem(BaseModel):

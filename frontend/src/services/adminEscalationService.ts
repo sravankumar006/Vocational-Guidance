@@ -9,6 +9,7 @@ import type {
   EscalationDetailItem,
   EscalationFilterParams,
   EscalationStatusUpdateRequest,
+  CounsellorOption,
 } from '@/types/adminEscalation';
 
 function buildQuery(params?: EscalationFilterParams): string {
@@ -70,6 +71,35 @@ export const adminEscalationService = {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Retrieves available counsellors and staff for assignment.
+   */
+  async getCounsellors(): Promise<CounsellorOption[]> {
+    return await apiClient<CounsellorOption[]>('/api/admin/counsellors');
+  },
+
+  /**
+   * Assigns, reassigns, or unassigns an escalation case.
+   */
+  async assignCounsellor(escalationId: number, assignedToUserId: number | null): Promise<EscalationDetailItem> {
+    return await apiClient<EscalationDetailItem>(`/api/admin/escalations/${escalationId}/assign`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assigned_to_user_id: assignedToUserId }),
+    });
+  },
+
+  /**
+   * Updates escalation priority (Normal, High, Urgent).
+   */
+  async updatePriority(escalationId: number, priority: string): Promise<EscalationDetailItem> {
+    return await apiClient<EscalationDetailItem>(`/api/admin/escalations/${escalationId}/priority`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priority }),
     });
   },
 };

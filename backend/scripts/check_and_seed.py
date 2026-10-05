@@ -76,8 +76,11 @@ CANONICAL_CATEGORIES = [
     ]),
 ]
 
-def seed_rich_data():
-    db: Session = SessionLocal()
+def seed_rich_data(db: Optional[Session] = None):
+    owns_session = False
+    if db is None:
+        db = SessionLocal()
+        owns_session = True
     try:
         now = datetime.utcnow()
         print("=== Checking existing database records ===")
@@ -363,7 +366,12 @@ def seed_rich_data():
         print(f"[!] Error during seeding: {e}")
         raise
     finally:
-        db.close()
+        if owns_session:
+            db.close()
+
+
+seed_analytics_data = seed_rich_data
 
 if __name__ == "__main__":
     seed_rich_data()
+

@@ -150,3 +150,14 @@ class CareerRecommendationsResponse(BaseModel):
     )
     weights_used: Dict[str, float]
     algorithm: str = "deterministic_compatibility_v1"
+
+
+class CourseListResponse(BaseModel):
+    items: List[CourseSummary]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool
+
